@@ -15,7 +15,13 @@ import ColorSwatches from "@/components/ColorSwatches.astro";
 import ReferenceList from "@/components/ReferenceList.astro";
 import CodeBlock from "@/components/CodeBlock.tsx";
 import LivePreview from "@/components/LivePreview.tsx";
-import { getAllConcepts, type Concept } from "@/lib/parse-library";
+import Disclosure from "@/components/Disclosure.astro";
+import {
+  getAllConcepts,
+  type Concept,
+  type Section,
+  type Token,
+} from "@/lib/parse-library";
 import { domainById } from "@/lib/domains";
 
 export async function getStaticPaths() {
@@ -43,6 +49,125 @@ const next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : undefin
 const hasColors = concept.colors.length > 0;
 const hasToc = concept.sections.length > 0;
 const hasAside = hasColors || hasToc;
+
+// ---------------------------------------------------------------------------
+// Progressive disclosure: classify sections PRIMARY (open) vs SECONDARY
+// (collapsed). PRIMARY = overview & decision content (what it is / when to use /
+// when not to use / how it works) PLUS whichever section holds the FIRST
+// runnable live preview. SECONDARY = everything else (full code listings,
+// accessibility deep-dive, references, slop warnings, long-tail sections).
+//
+// Robustness: if the heuristic yields < 2 primary sections, fall back to
+// "first 2 sections open, rest collapsed". The section that holds the first
+// live preview is NEVER collapsed.
+// ---------------------------------------------------------------------------
+
+function hasRunnable(section: Section): boolean {
+  return section.tokens.some((t) => t.type === "code" && t.runnable);
+}
+
+/** Index of the first section (document order) that contains a runnable demo. */
+const firstPreviewIdx = concept.sections.findIndex(hasRunnable);
+
+const PRIMARY_TITLE_RE =
+  /^(what it is|what it'?s|when to use|when not to use|when to use it|when not to use it|how it works)\b/i;
+
+function isPrimaryByTitle(title: string): boolean {
+  return PRIMARY_TITLE_RE.test(title.trim());
+}
+
+interface SectionPlan {
+  section: Section;
+  index: number;
+  primary: boolean;
+}
+
+let plan: SectionPlan[] = concept.sections.map((section, index) => ({
+  section,
+  index,
+  // Never collapse the section that holds the first live preview.
+  primary: isPrimaryByTitle(section.title) || index === firstPreviewIdx,
+}));
+
+// Fallback: if fewer than 2 primary sections, open the first two outright
+// (still never collapsing the first-preview section).
+const primaryCount = plan.filter((p) => p.primary).length;
+if (primaryCount < 2) {
+  plan = plan.map((p) => ({
+    ...p,
+    primary: p.primary || p.index < 2,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Within a PRIMARY section, keep the FIRST runnable preview prominent and tuck
+// any ADDITIONAL previews / large code blocks into a nested disclosure so the
+// first screen stays light. We split a primary section's tokens into a "lead"
+// run (everything up to and including the first runnable preview, plus any
+// immediately-following prose) and an "extra" run (subsequent previews and
+// large code blocks). Only split when the extra run actually carries weight.
+// ---------------------------------------------------------------------------
+
+const LARGE_CODE_LINES = 14; // a code block past this many lines counts as "large"
+
+function isLargeCode(token: Token): boolean {
+  return (
+    token.type === "code" &&
+    !token.runnable &&
+    token.code.split("\n").length > LARGE_CODE_LINES
+  );
+}
+
+interface SplitTokens {
+  lead: Token[];
+  extra: Token[];
+  /** label for the nested disclosure, depends on what's tucked away */
+  extraLabel: string;
+}
+
+function splitPrimaryTokens(section: Section): SplitTokens {
+  const tokens = section.tokens;
+  const firstRunnable = tokens.findIndex(
+    (t) => t.type === "code" && t.runnable
+  );
+
+  // No runnable in this primary section: only tuck away large code if there are
+  // several, otherwise keep everything in the lead (it's overview prose).
+  if (firstRunnable === -1) {
+    const largeIdx = tokens.findIndex(isLargeCode);
+    // If there's a single large code block in an overview section, leave it.
+    const largeCount = tokens.filter(isLargeCode).length;
+    if (largeCount >= 2 && largeIdx !== -1) {
+      return {
+        lead: tokens.slice(0, largeIdx),
+        extra: tokens.slice(largeIdx),
+        extraLabel: "Show full code",
+      };
+    }
+    return { lead: tokens, extra: [], extraLabel: "" };
+  }
+
+  // Keep through the first runnable preview AND any single prose token right
+  // after it (a short caption reads well inline).
+  let leadEnd = firstRunnable + 1;
+  if (tokens[leadEnd]?.type === "prose") leadEnd += 1;
+
+  const extra = tokens.slice(leadEnd);
+  // Only tuck away if the extra run has another preview or a large code block.
+  const extraHasWeight = extra.some(
+    (t) => (t.type === "code" && t.runnable) || isLargeCode(t)
+  );
+  if (!extraHasWeight) {
+    return { lead: tokens, extra: [], extraLabel: "" };
+  }
+
+  const extraHasPreview = extra.some((t) => t.type === "code" && t.runnable);
+  return {
+    lead: tokens.slice(0, leadEnd),
+    extra,
+    extraLabel: extraHasPreview ? "Show more examples" : "Show full code",
+  };
+}
 ---
 
 <Base title={concept.title} description={concept.definition}>
@@ -89,36 +214,69 @@ const hasAside = hasColors || hasToc;
 
       <article class="concept__article">
         {
-          concept.sections.map((section) => (
-            <section class="concept__section">
-              <h2 id={section.slug} class="concept__h2">
-                {section.title}
-              </h2>
-              {section.tokens.map((token) =>
-                token.type === "prose" ? (
-                  <div class="prose" set:html={token.html} />
-                ) : token.runnable ? (
-                  <div class="concept__demo">
-                    <LivePreview
-                      code={token.code}
-                      highlighted={token.highlighted}
-                      lang={token.lang}
-                      client:visible
-                    />
-                  </div>
-                ) : (
-                  <div class="concept__code">
-                    <CodeBlock
-                      code={token.code}
-                      highlighted={token.highlighted}
-                      lang={token.lang}
-                      client:visible
-                    />
-                  </div>
-                )
-              )}
-            </section>
-          ))
+          plan.map(({ section, primary }) => {
+            // Token renderer shared by primary lead/extra and secondary bodies.
+            const renderToken = (token: Token) =>
+              token.type === "prose" ? (
+                <div class="prose" set:html={token.html} />
+              ) : token.runnable ? (
+                <div class="concept__demo">
+                  <LivePreview
+                    code={token.code}
+                    highlighted={token.highlighted}
+                    lang={token.lang}
+                    client:visible
+                  />
+                </div>
+              ) : (
+                <div class="concept__code">
+                  <CodeBlock
+                    code={token.code}
+                    highlighted={token.highlighted}
+                    lang={token.lang}
+                    client:visible
+                  />
+                </div>
+              );
+
+            if (!primary) {
+              // SECONDARY: collapsed by default. The heading id lives on the
+              // <details> so TOC links can find and open it. The visible <h2>
+              // sits inside the summary's row context but we keep a real
+              // heading inside the body for document structure.
+              return (
+                <section class="concept__section concept__section--secondary">
+                  <Disclosure
+                    summaryLabel={`Show: ${section.title}`}
+                    id={section.slug}
+                    variant="section"
+                  >
+                    <h2 class="concept__h2 concept__h2--insummary">
+                      {section.title}
+                    </h2>
+                    {section.tokens.map(renderToken)}
+                  </Disclosure>
+                </section>
+              );
+            }
+
+            // PRIMARY: open. Split off extra previews/large code into a nested
+            // disclosure to keep the first screen light.
+            const { lead, extra, extraLabel } = splitPrimaryTokens(section);
+            return (
+              <section class="concept__section">
+                <h2 id={section.slug} class="concept__h2">
+                  {section.title}
+                </h2>
+                {lead.map(renderToken)}
+                {extra.length > 0 && (
+                  <Disclosure summaryLabel={extraLabel} variant="inline">
+                    {extra.map(renderToken)}
+                  </Disclosure>
+                )}
+              </section>
+            );
+          })
         }
 
         {
@@ -266,21 +424,38 @@ const hasAside = hasColors || hasToc;
     min-inline-size: 0;
   }
 
+  /* Calm rhythm: generous breathing room between bands; lean on whitespace
+     rather than borders to separate one idea from the next. */
   .concept__section + .concept__section {
-    margin-block-start: var(--space-2xl);
+    margin-block-start: var(--space-3xl);
+  }
+
+  /* Secondary (collapsed) sections sit closer together — a quiet stack of
+     disclosure rows, not full bands. */
+  .concept__section--secondary + .concept__section--secondary {
+    margin-block-start: var(--space-m);
   }
 
   .concept__h2 {
-    font-size: var(--step-3);
-    scroll-margin-block-start: calc(60px + var(--space-m));
+    font-size: var(--step-2);
+    scroll-margin-block-start: calc(60px + var(--space-l));
     margin-block-end: var(--space-m);
-    padding-block-end: var(--space-xs);
-    border-block-end: var(--border-hair) solid var(--border);
+    /* Quieter rule: no heavy underline on every heading. Whitespace separates. */
+  }
+
+  /* Heading shown inside an expanded secondary disclosure: it already follows a
+     "Show: …" summary row, so keep it understated. */
+  .concept__h2--insummary {
+    font-size: var(--step-1);
+    margin-block-start: 0;
+    margin-block-end: var(--space-s);
+    color: var(--text-strong);
   }
 
   /* Prose sits within a comfortable reading measure. */
   .concept__section :global(.prose) {
     margin-block-start: var(--space-m);
+    max-inline-size: var(--measure);
   }
 
   /* Code samples align with the prose measure but allow horizontal scroll. */
@@ -417,17 +592,34 @@ const hasAside = hasColors || hasToc;
     outline-offset: 2px;
   }
 
-  :global(.livepreview__note) {
+  /* Classifier-driven hint row (scroll / pointer / loop). Calm, low-contrast. */
+  :global(.livepreview__hint) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
     margin: 0;
     padding: var(--space-xs) var(--space-m);
     border-block-end: var(--border-hair) solid var(--border);
-    background: color-mix(in oklch, var(--accent) 8%, var(--surface));
+    background: color-mix(in oklch, var(--accent) 7%, var(--surface));
     color: var(--muted);
     font-size: var(--step--1);
   }
 
+  /* CSS-drawn downward arrow for the scroll hint (no emoji). A chevron: a
+     square with two borders rotated 45deg so it points down. */
+  :global(.livepreview__hint-arrow) {
+    flex: none;
+    inline-size: 8px;
+    block-size: 8px;
+    border-inline-end: 2px solid var(--accent);
+    border-block-end: 2px solid var(--accent);
+    transform: rotate(45deg);
+  }
+
   :global(.livepreview__frame-wrap) {
     background: var(--preview-bg);
+    /* Never clip the iframe's own scrolling. */
+    overflow: visible;
   }
 
   :global(.livepreview__frame) {
@@ -437,8 +629,23 @@ const hasAside = hasColors || hasToc;
     border: 0;
   }
 
+  /* Scroll demos need real travel: the iframe is the scroll root for
+     animation-timeline: scroll(root block), so give it a taller default frame
+     and let it scroll internally. */
+  :global(.livepreview[data-kind="scroll"] .livepreview__frame) {
+    block-size: 560px;
+  }
+
   :global(.livepreview__frame-wrap[data-expanded="true"] .livepreview__frame) {
     block-size: 680px;
+  }
+
+  :global(
+      .livepreview[data-kind="scroll"]
+        .livepreview__frame-wrap[data-expanded="true"]
+        .livepreview__frame
+    ) {
+    block-size: 760px;
   }
 
   /* ---- CodeBlock ---- */
@@ -499,7 +706,13 @@ const hasAside = hasColors || hasToc;
   }
 
   :global(.codeblock__code) {
-    overflow: hidden;
+    /* Long code lines scroll horizontally within the card.
+       overflow-x: auto contains the scroll so no document-level overflow leaks.
+       min-inline-size: 0 prevents the flex/grid child from overflowing its track.
+       overflow-y stays visible (default) so no vertical content is clipped. */
+    overflow-x: auto;
+    min-inline-size: 0;
+    max-inline-size: 100%;
   }
 
   /* The shiki <pre> already carries its own padding/border via global.css;

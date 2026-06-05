@@ -37,6 +37,67 @@ const { sections } = Astro.props;
 
 <script is:inline>
   (function () {
+    // --- Open the enclosing <details> when a TOC link targets a collapsed
+    //     section, then scroll the heading into view. Progressive enhancement:
+    //     without JS the anchors still navigate; this just makes a collapsed
+    //     section reveal itself. Runs regardless of reduced-motion.
+    function revealTarget(id) {
+      if (!id) return;
+      var target = document.getElementById(id);
+      if (!target) return;
+      // Walk up: open every <details> ancestor so the target is visible.
+      var node = target;
+      while (node && node !== document.body) {
+        if (
+          node.tagName &&
+          node.tagName.toLowerCase() === "details" &&
+          !node.open
+        ) {
+          node.open = true;
+        }
+        node = node.parentNode;
+      }
+      // Defer scroll until after the details have laid out.
+      var reduceMq =
+        window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.requestAnimationFrame(function () {
+        target.scrollIntoView({
+          behavior: reduceMq ? "auto" : "smooth",
+          block: "start",
+        });
+      });
+    }
+
+    document.addEventListener("click", function (e) {
+      var a = e.target && e.target.closest && e.target.closest("[data-toc-link]");
+      if (!a) return;
+      var id = a.getAttribute("data-toc-link");
+      var target = document.getElementById(id);
+      if (!target) return;
+      // Only intercept to open a collapsed section; let the browser handle the
+      // hash update afterwards.
+      e.preventDefault();
+      revealTarget(id);
+      // Update the URL hash without an extra jump.
+      if (history.replaceState) history.replaceState(null, "", "#" + id);
+      else window.location.hash = id;
+    });
+
+    window.addEventListener("hashchange", function () {
+      var id = decodeURIComponent((window.location.hash || "").replace(/^#/, ""));
+      revealTarget(id);
+    });
+
+    // On initial load with a hash (e.g. shared deep link), reveal it.
+    if (window.location.hash) {
+      revealTarget(
+        decodeURIComponent(window.location.hash.replace(/^#/, ""))
+      );
+    }
+  })();
+
+  (function () {
     var reduce =
       window.matchMedia &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;

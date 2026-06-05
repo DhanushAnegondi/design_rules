@@ -1,0 +1,124 @@
+---
+/**
+ * Disclosure.astro — an accessible, JS-free disclosure built on native
+ * <details>/<summary>. Used to progressively reveal SECONDARY concept sections
+ * (full code listings, accessibility deep-dives, references, slop warnings) so
+ * the first screen of a concept page stays calm.
+ *
+ * - Works with zero JavaScript; <details> is keyboard-operable and screen-reader
+ *   friendly by default.
+ * - The summary reads like a calm, tappable row (>=44px) with a CSS-drawn
+ *   rotation indicator (a chevron made from a rotated border — no icon font, no
+ *   emoji).
+ * - `summaryLabel` is the visible label (e.g. "Show: Accessibility"). The
+ *   enclosed slot is the full, unchanged section content.
+ * - `id` is placed on the <details> so a progressive-enhancement script on the
+ *   page can find and open it when a TOC link targets a heading inside.
+ * - `open` opens it by default (rare; default is collapsed).
+ */
+interface Props {
+  summaryLabel: string;
+  id?: string;
+  open?: boolean;
+  /** Extra class on the <details> for variant styling (e.g. nested "more code"). */
+  variant?: "section" | "inline";
+}
+
+const { summaryLabel, id, open = false, variant = "section" } = Astro.props;
+---
+
+<details
+  class:list={["disclosure", `disclosure--${variant}`]}
+  id={id}
+  open={open}
+>
+  <summary class="disclosure__summary">
+    <span class="disclosure__chevron" aria-hidden="true"></span>
+    <span class="disclosure__label">{summaryLabel}</span>
+  </summary>
+  <div class="disclosure__body">
+    <slot />
+  </div>
+</details>
+
+<style>
+  .disclosure {
+    margin-block-start: var(--space-l);
+  }
+
+  /* The summary is the tappable row. Calm: leans on type + a small chevron,
+     not a heavy filled bar. */
+  .disclosure__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+    min-block-size: 44px;
+    padding-block: var(--space-2xs);
+    padding-inline: 0;
+    cursor: pointer;
+    list-style: none; /* hide the default marker (Firefox/Safari) */
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.02em;
+    user-select: none;
+  }
+
+  /* Hide the default disclosure triangle across engines. */
+  .disclosure__summary::-webkit-details-marker {
+    display: none;
+  }
+  .disclosure__summary::marker {
+    content: "";
+  }
+
+  .disclosure__summary:hover .disclosure__label {
+    color: var(--text-strong);
+  }
+
+  .disclosure__summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 4px;
+    border-radius: var(--radius-s);
+  }
+
+  /* CSS-drawn chevron: a square with two visible borders, rotated 45deg so it
+     reads as a ">". Rotates to point down when the disclosure is open. */
+  .disclosure__chevron {
+    flex: none;
+    inline-size: 8px;
+    block-size: 8px;
+    border-inline-end: 2px solid var(--faint);
+    border-block-end: 2px solid var(--faint);
+    transform: rotate(-45deg);
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .disclosure[open] .disclosure__chevron {
+    transform: rotate(45deg);
+  }
+
+  .disclosure__summary:hover .disclosure__chevron {
+    border-color: var(--accent);
+  }
+
+  .disclosure__label::before {
+    /* Nothing — kept as a hook if a future variant wants a prefix glyph. */
+  }
+
+  .disclosure__body {
+    margin-block-start: var(--space-m);
+  }
+
+  /* Inline variant (nested "show more examples" inside a primary section):
+     slightly tighter top margin so it tucks under the first example. */
+  .disclosure--inline {
+    margin-block-start: var(--space-m);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .disclosure__chevron {
+      transition: none;
+    }
+  }
+</style>

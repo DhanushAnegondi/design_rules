@@ -24,10 +24,10 @@
   --space-xs: clamp(0.56rem, 0.53rem + 0.13vw, 0.63rem);
   --space-s: clamp(0.75rem, 0.71rem + 0.2vw, 0.88rem);
   --space-m: clamp(1.13rem, 1.06rem + 0.33vw, 1.31rem);
-  --space-l: clamp(1.5rem, 1.41rem + 0.46vw, 1.75rem);
-  --space-xl: clamp(2.25rem, 2.11rem + 0.7vw, 2.63rem);
-  --space-2xl: clamp(3rem, 2.81rem + 0.93vw, 3.5rem);
-  --space-3xl: clamp(4.5rem, 4.22rem + 1.4vw, 5.25rem);
+  --space-l: clamp(1.63rem, 1.52rem + 0.52vw, 1.94rem);
+  --space-xl: clamp(2.5rem, 2.34rem + 0.8vw, 2.94rem);
+  --space-2xl: clamp(3.38rem, 3.16rem + 1.1vw, 3.94rem);
+  --space-3xl: clamp(5rem, 4.67rem + 1.65vw, 5.88rem);
 
   /* ---- Radii, borders, shadows ---- */
   --radius-s: 8px;
@@ -60,8 +60,8 @@
   --text-strong: oklch(99% 0.012 85);
   --muted: oklch(72% 0.018 75);
   --faint: oklch(58% 0.015 75);
-  --border: oklch(34% 0.012 70);
-  --border-strong: oklch(46% 0.014 70);
+  --border: oklch(30% 0.01 70);
+  --border-strong: oklch(42% 0.013 70);
   --accent: oklch(74% 0.15 62);
   --accent-hover: oklch(80% 0.15 62);
   --accent-contrast: oklch(20% 0.03 62);
