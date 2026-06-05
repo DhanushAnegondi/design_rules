@@ -444,7 +444,12 @@ const DOMAIN_ORDER = new Map(DOMAINS.map((d, i) => [d.id, i]));
 let _allConcepts: Concept[] | null = null;
 
 export async function getAllConcepts(): Promise<Concept[]> {
-  if (_allConcepts) return _allConcepts;
+  // Only treat a NON-EMPTY result as cached. In `astro dev`, the first request
+  // can land before the content store has synced, so getCollection() returns []
+  // momentarily. An empty array is truthy, so caching it here would pin the site
+  // to "0 concepts" for the life of the dev server (no routes, "0 techniques").
+  // Guarding on length lets the next request re-read once the store is ready.
+  if (_allConcepts && _allConcepts.length > 0) return _allConcepts;
 
   const entries = await getCollection("concepts");
 
@@ -460,7 +465,8 @@ export async function getAllConcepts(): Promise<Concept[]> {
     return a.title.localeCompare(b.title);
   });
 
-  _allConcepts = parsed;
+  // Don't cache an empty result (see note above); only memoize real data.
+  if (parsed.length > 0) _allConcepts = parsed;
   return parsed;
 }
 
