@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
+import CodeModal from "./CodeModal";
 
 interface Props {
   code: string;
   /** shiki-highlighted HTML (already themed for light/dark by global.css) */
   highlighted: string;
   lang: string;
+  /** Optional one-line label for the View-code window title. */
+  label?: string;
 }
 
 /** What kind of demo is this? Drives frame height, affordance, and the hint copy. */
@@ -209,26 +212,14 @@ function buildSrcDoc(code: string, kind: DemoKind): string {
  * (guarded by reduced-motion). Page-level reduced-motion is honored by global.css
  * for everything outside the iframe.
  */
-export default function LivePreview({ code, highlighted, lang }: Props) {
+export default function LivePreview({ code, highlighted, lang, label }: Props) {
   const [reloadKey, setReloadKey] = useState(0);
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const kind = useMemo(() => classifyDemo(code), [code]);
   const hint = HINTS[kind];
   // Only inject the auto-demo for scroll kinds; recompute when code changes.
   const srcDoc = useMemo(() => buildSrcDoc(code, kind), [code, kind]);
-
-  async function copy() {
-    try {
-      // Always copy the ORIGINAL, unmodified sample — never the injected srcDoc.
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard unavailable — fail quietly.
-    }
-  }
 
   return (
     <section className="livepreview" aria-label="Live preview" data-kind={kind}>
@@ -281,26 +272,15 @@ export default function LivePreview({ code, highlighted, lang }: Props) {
         />
       </div>
 
-      <figure className="codeblock codeblock--inpreview">
-        <figcaption className="codeblock__bar">
-          <span className="codeblock__lang">{lang}</span>
-          <button
-            type="button"
-            className="codeblock__copy"
-            onClick={copy}
-            aria-label={
-              copied ? "Copied to clipboard" : "Copy code to clipboard"
-            }
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </figcaption>
-        <div
-          className="codeblock__code"
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: highlighted }}
+      <footer className="livepreview__foot">
+        <CodeModal
+          code={code}
+          highlighted={highlighted}
+          lang={lang}
+          label={label}
+          trigger="button"
         />
-      </figure>
+      </footer>
     </section>
   );
 }

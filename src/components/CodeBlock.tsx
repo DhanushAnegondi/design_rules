@@ -1,51 +1,35 @@
-import { useState } from "react";
+import CodeModal from "./CodeModal";
 
 interface Props {
   code: string;
   /** shiki-highlighted HTML (already themed for light/dark by global.css) */
   highlighted: string;
   lang: string;
+  /**
+   * One-line description of what this snippet is, lifted from the preceding
+   * prose/section context when available; otherwise the page passes the lang.
+   * Shown on the compact trigger row and as the mini-window title.
+   */
+  label?: string;
 }
 
 /**
- * CodeBlock — a non-runnable code sample with a copy button.
+ * CodeBlock — a standalone (non-runnable) code sample. Instead of dumping an
+ * inline code wall, it renders a compact, labelled "View code" row that opens
+ * the source in the shared CodeModal mini-window (with Copy + Close + focus
+ * trap + Esc, all handled by CodeModal).
  *
- * The highlighted markup is produced at build time by shiki (parse-library.ts)
- * and is injected verbatim; we never re-highlight on the client. The Copy button
- * writes the raw `code` to the clipboard and shows a transient "Copied" label.
- * Reduced-motion safe: state change is a plain text swap, no large movement.
+ * The highlighted markup is produced at build time by shiki; the modal injects
+ * it verbatim and the Copy button writes the raw `code`.
  */
-export default function CodeBlock({ code, highlighted, lang }: Props) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard unavailable (insecure context / denied) — fail quietly.
-    }
-  }
-
+export default function CodeBlock({ code, highlighted, lang, label }: Props) {
   return (
-    <figure className="codeblock">
-      <figcaption className="codeblock__bar">
-        <span className="codeblock__lang">{lang}</span>
-        <button
-          type="button"
-          className="codeblock__copy"
-          onClick={copy}
-          aria-label={copied ? "Copied to clipboard" : "Copy code to clipboard"}
-        >
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </figcaption>
-      <div
-        className="codeblock__code"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: highlighted }}
-      />
-    </figure>
+    <CodeModal
+      code={code}
+      highlighted={highlighted}
+      lang={lang}
+      label={label}
+      trigger="row"
+    />
   );
 }

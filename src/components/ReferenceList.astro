@@ -12,8 +12,6 @@ interface Props {
 }
 
 const { refs } = Astro.props;
-
-const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
 ---
 
 {
@@ -29,11 +27,6 @@ const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
                 <span class="reflist__label">{ref.label}</span>
                 {domain && (
                   <span class="reflist__domain">
-                    <span
-                      class="reflist__dot"
-                      style={`background:${dot(domain.accentHue)}`}
-                      aria-hidden="true"
-                    />
                     {domain.title}
                   </span>
                 )}
@@ -95,15 +88,8 @@ const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
   .reflist__domain {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-2xs);
     font-size: var(--step--1);
     color: var(--muted);
-  }
-
-  .reflist__dot {
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
-    border-radius: 50%;
   }
 
   @media (prefers-reduced-motion: reduce) {

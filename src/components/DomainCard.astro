@@ -2,14 +2,25 @@
 /**
  * DomainCard.astro — a bento tile linking to a domain index (`/{domain.id}`).
  *
- * Shows the domain title (display face), its beginner-facing blurb, the concept
- * count, and a small per-domain accent dot. The dot is the ONLY place the
- * per-domain hue appears — the tile itself uses neutral surface tokens, never a
- * full coloured background (see docs/GUIDELINES.md, color rules).
+ * Shows the domain title (display face), its beginner-facing blurb, and the
+ * concept count. Behind the text sits a per-domain CSS *motif*: a quiet visual
+ * metaphor for the domain (frosted glass planes, drifting motion lines, a grid
+ * skeleton, stacked UI blocks, a ghosted glyph, layered cards, an aurora field,
+ * a shimmer/progress bar, or nested device frames). The motif is what tells the
+ * nine tiles apart — not a coloured legend dot.
+ *
+ * Identity is preserved: the tile is a neutral surface with the single amber
+ * accent. Each card's `accentHue` only appears as a very low-chroma tint inside
+ * its own motif, kept faint so text stays AA-legible and the bento reads calm,
+ * not as nine loud rainbow blocks (see docs/GUIDELINES.md, color rules).
+ *
+ * Motion is subtle, GPU-friendly (transform/opacity only), mostly engaged on
+ * hover/focus, and fully disabled under `prefers-reduced-motion` — the motif
+ * then renders as a static, calm version.
  *
  * `featured` makes the tile larger in the bento (spans 2 columns / 2 rows on
- * wide screens) and bumps the type, so the grid has genuine size variance
- * instead of nine identical cards.
+ * wide screens) and bumps the type + motif scale, so the grid has genuine size
+ * variance instead of nine identical cards.
  */
 import type { Domain } from "@/lib/domains";
 
@@ -21,18 +32,24 @@ interface Props {
 
 const { domain, count, featured = false } = Astro.props;
 
-// Per-domain accent dot only — matches the hue used in the nav.
-const dot = `oklch(70% 0.13 ${domain.accentHue})`;
 const countLabel = `${count} ${count === 1 ? "concept" : "concepts"}`;
+
+// Per-domain hue, exposed to CSS as a custom property. Used only as a faint,
+// low-chroma tint inside the motif — never as a full-tile fill.
+const hueVar = `--card-hue:${domain.accentHue}`;
 ---
 
 <a
   class="domain-card"
   class:list={[{ "domain-card--featured": featured }]}
   href={`/${domain.id}`}
+  style={hueVar}
+  data-motif={domain.motif}
 >
+  {/* Background motif. Decorative, low-contrast, behind all text. */}
+  <span class="domain-card__motif" aria-hidden="true"></span>
+
   <span class="domain-card__top">
-    <span class="domain-card__dot" style={`background:${dot}`} aria-hidden="true"></span>
     <span class="domain-card__count">{countLabel}</span>
   </span>
 
@@ -53,6 +70,7 @@ const countLabel = `${count} ${count === 1 ? "concept" : "concepts"}`;
   .domain-card {
     /* The whole tile is one link. */
     position: relative;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
     gap: var(--space-l);
@@ -61,6 +79,15 @@ const countLabel = `${count} ${count === 1 ? "concept" : "concepts"}`;
     padding: var(--space-xl);
     border: var(--border-hair) solid var(--border);
     border-radius: var(--radius-l);
+    /* Motif ink, theme-aware. In dark mode the motif is a light tint that sits
+       ABOVE the dark surface; in light mode it must be a DARKER tint to register
+       against the near-white surface. --motif-l is the ink lightness, --motif-a
+       a global alpha scale. Both stay low enough that text remains AA-legible.
+       (Scoped to this component; tokens.css is untouched.) */
+    --motif-l: 80%;
+    --motif-a: 1;
+    --motif-hair: oklch(100% 0 0 / 0.07);
+    --motif-sheen: oklch(100% 0 0 / 0.1);
     background: var(--surface);
     color: var(--text);
     text-decoration: none;
@@ -82,18 +109,337 @@ const countLabel = `${count} ${count === 1 ? "concept" : "concepts"}`;
     outline-offset: 3px;
   }
 
-  /* ---- Top row: accent dot + concept count ---- */
+  /* Light theme: surface is near-white, so the motif ink must go darker (lower
+     lightness) and slightly stronger to register, while staying well inside AA.
+     Hairlines flip from white to a dark, low-alpha line. */
+  :global([data-theme="light"]) .domain-card {
+    --motif-l: 52%;
+    --motif-a: 1.15;
+    --motif-hair: oklch(20% 0.02 70 / 0.08);
+    --motif-sheen: oklch(20% 0.02 70 / 0.06);
+  }
+
+  /* =====================================================================
+     MOTIF LAYER
+     A single decorative span behind the content. Each `data-motif` value
+     paints a different metaphor using gradients / masks / pseudo-elements.
+     Kept faint (low alpha, low chroma) so the title and blurb stay AA.
+     A per-card faint hue tint is derived from --card-hue; the bulk of the
+     surface stays neutral so the bento reads cohesive, not rainbow.
+     ===================================================================== */
+  .domain-card__motif {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    /* Faint per-domain wash, anchored to a corner so text sits over the
+       calmer area. Very low chroma keeps it a tint, not a colour block. */
+    background:
+      radial-gradient(
+        120% 90% at 92% 8%,
+        oklch(var(--motif-l) 0.05 var(--card-hue) / calc(0.12 * var(--motif-a))) 0%,
+        oklch(var(--motif-l) 0.05 var(--card-hue) / 0) 55%
+      );
+    opacity: 0.9;
+    transition: opacity var(--dur-mid) var(--ease-out-quart);
+  }
+
+  /* The motif's "active" geometry lives in ::before; ::after carries a second
+     plane where a motif needs two layers. Both are masked toward the top-right
+     so the text column (lower-left) stays clean and legible. */
+  .domain-card__motif::before,
+  .domain-card__motif::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .domain-card:hover .domain-card__motif {
+    opacity: 1;
+  }
+
+  /* ---------- glass: layered frosted planes (visual-styles) ---------- */
+  [data-motif="glass"] .domain-card__motif::before {
+    /* Three offset rounded planes with hairline edges = stacked glass. */
+    background:
+      linear-gradient(135deg, oklch(var(--motif-l) 0.03 var(--card-hue) / calc(0.17 * var(--motif-a))), oklch(var(--motif-l) 0.03 var(--card-hue) / 0)) ,
+      linear-gradient(135deg, oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.12 * var(--motif-a))), oklch(var(--motif-l) 0.02 var(--card-hue) / 0));
+    background-repeat: no-repeat;
+    background-size: 58% 58%, 44% 44%;
+    background-position: 100% 0, 78% 22%;
+    box-shadow:
+      inset -1px 1px 0 var(--motif-hair),
+      inset -34% 34% 0 -33% var(--motif-hair);
+    -webkit-mask-image: radial-gradient(140% 120% at 100% 0, #000 38%, transparent 78%);
+    mask-image: radial-gradient(140% 120% at 100% 0, #000 38%, transparent 78%);
+  }
+  [data-motif="glass"] .domain-card__motif::after {
+    /* Hairline plane outlines for the "machined glass" read. */
+    background:
+      linear-gradient(transparent 0 0) ;
+    border: var(--border-hair) solid var(--motif-hair);
+    inset: 14% 8% auto auto;
+    inline-size: 46%;
+    block-size: 46%;
+    border-radius: var(--radius-m);
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  .domain-card[data-motif="glass"]:hover .domain-card__motif::after {
+    transform: translate(-3px, 3px);
+  }
+
+  /* ---------- motion: drifting parallel lines + easing curve (scroll-motion) ---------- */
+  [data-motif="motion"] .domain-card__motif::before {
+    /* Parallel motion streaks, brighter at the leading (right) edge. */
+    background:
+      repeating-linear-gradient(
+        115deg,
+        oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.2 * var(--motif-a))) 0 2px,
+        transparent 2px 16px
+      );
+    -webkit-mask-image: linear-gradient(115deg, transparent 30%, #000 100%);
+    mask-image: linear-gradient(115deg, transparent 30%, #000 100%);
+    transform: translateX(0);
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  [data-motif="motion"] .domain-card__motif::after {
+    /* A quiet ease-out curve drawn with a conic-edged radial — a quarter arc. */
+    inset: 12% 10% auto auto;
+    inline-size: 42%;
+    block-size: 42%;
+    background: radial-gradient(
+      120% 120% at 0 100%,
+      transparent 64%,
+      oklch(var(--motif-l) 0.06 var(--card-hue) / calc(0.38 * var(--motif-a))) 65%,
+      oklch(var(--motif-l) 0.06 var(--card-hue) / calc(0.38 * var(--motif-a))) 67%,
+      transparent 68%
+    );
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  .domain-card[data-motif="motion"]:hover .domain-card__motif::before {
+    transform: translateX(10px);
+  }
+  .domain-card[data-motif="motion"]:hover .domain-card__motif::after {
+    transform: translate(4px, -4px);
+  }
+
+  /* ---------- grid: modular bento skeleton (layout-systems) ---------- */
+  [data-motif="grid"] .domain-card__motif::before {
+    /* A faint modular grid of hairlines. */
+    background:
+      linear-gradient(oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.16 * var(--motif-a))) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.16 * var(--motif-a))) 1px, transparent 1px);
+    background-size: 22px 22px;
+    -webkit-mask-image: radial-gradient(150% 130% at 100% 0, #000 30%, transparent 80%);
+    mask-image: radial-gradient(150% 130% at 100% 0, #000 30%, transparent 80%);
+  }
+  [data-motif="grid"] .domain-card__motif::after {
+    /* One "filled" bento cell that gently shifts on hover. */
+    inset: 14% 12% auto auto;
+    inline-size: 30%;
+    block-size: 30%;
+    background: oklch(var(--motif-l) 0.05 var(--card-hue) / calc(0.2 * var(--motif-a)));
+    border-radius: var(--radius-s);
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  .domain-card[data-motif="grid"]:hover .domain-card__motif::after {
+    transform: translate(-22px, 22px);
+  }
+
+  /* ---------- blocks: stacked UI building-block tiles (component-patterns) ---------- */
+  [data-motif="blocks"] .domain-card__motif::before {
+    /* Three stacked rounded tiles like a stack of components. */
+    background:
+      linear-gradient(oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.22 * var(--motif-a))), oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.22 * var(--motif-a)))),
+      linear-gradient(oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.16 * var(--motif-a))), oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.16 * var(--motif-a)))),
+      linear-gradient(oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.11 * var(--motif-a))), oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.11 * var(--motif-a))));
+    background-repeat: no-repeat;
+    background-size: 40% 16%, 46% 16%, 52% 16%;
+    background-position: 100% 14%, 100% 40%, 100% 66%;
+    transition: background-position var(--dur-slow) var(--ease-out-expo);
+  }
+  .domain-card[data-motif="blocks"]:hover .domain-card__motif::before {
+    background-position: 96% 14%, 100% 40%, 92% 66%;
+  }
+
+  /* ---------- type: ghosted glyph + swatch strip (typography-color) ---------- */
+  [data-motif="type"] .domain-card__motif::before {
+    /* A large ghosted "Aa" specimen, top-right, in the display face. */
+    content: "Aa";
+    inset: auto auto auto auto;
+    inline-size: auto;
+    block-size: auto;
+    top: -0.18em;
+    right: 0.12em;
+    font-family: var(--font-display);
+    font-weight: 560;
+    font-size: 7.5rem;
+    line-height: 1;
+    font-variation-settings: "opsz" 120;
+    color: oklch(var(--motif-l) 0.03 var(--card-hue) / calc(0.16 * var(--motif-a)));
+    -webkit-mask-image: radial-gradient(150% 130% at 100% 0, #000 20%, transparent 85%);
+    mask-image: radial-gradient(150% 130% at 100% 0, #000 20%, transparent 85%);
+  }
+  [data-motif="type"] .domain-card__motif::after {
+    /* A quiet swatch strip along the bottom edge. */
+    inset: auto 0 0 auto;
+    inline-size: 56%;
+    block-size: 4px;
+    border-radius: 2px;
+    background: linear-gradient(
+      90deg,
+      oklch(var(--motif-l) 0.07 var(--card-hue) / calc(0.36 * var(--motif-a))) 0 33%,
+      oklch(var(--motif-l) 0.05 var(--card-hue) / calc(0.28 * var(--motif-a))) 33% 66%,
+      oklch(var(--motif-l) 0.03 var(--card-hue) / calc(0.2 * var(--motif-a))) 66% 100%
+    );
+  }
+
+  /* ---------- layers: overlapping composition cards (recipes) ---------- */
+  [data-motif="layers"] .domain-card__motif::before {
+    /* Two overlapping cards = style + layout + behaviour composited. */
+    background:
+      linear-gradient(135deg, oklch(var(--motif-l) 0.045 var(--card-hue) / calc(0.2 * var(--motif-a))), oklch(var(--motif-l) 0.045 var(--card-hue) / calc(0.06 * var(--motif-a))));
+    background-repeat: no-repeat;
+    background-size: 44% 50%;
+    background-position: 86% 14%;
+    border-radius: var(--radius-m);
+    box-shadow:
+      14% -8% 0 -2% oklch(var(--motif-l) 0.045 var(--card-hue) / calc(0.13 * var(--motif-a))),
+      26% -16% 0 -4% oklch(var(--motif-l) 0.045 var(--card-hue) / calc(0.09 * var(--motif-a)));
+    -webkit-mask-image: radial-gradient(150% 130% at 100% 0, #000 32%, transparent 82%);
+    mask-image: radial-gradient(150% 130% at 100% 0, #000 32%, transparent 82%);
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  [data-motif="layers"] .domain-card__motif::after {
+    inset: 12% 12% auto auto;
+    inline-size: 40%;
+    block-size: 46%;
+    border: var(--border-hair) solid var(--motif-hair);
+    border-radius: var(--radius-m);
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  .domain-card[data-motif="layers"]:hover .domain-card__motif::before {
+    transform: translate(-4px, 3px);
+  }
+  .domain-card[data-motif="layers"]:hover .domain-card__motif::after {
+    transform: translate(4px, -3px);
+  }
+
+  /* ---------- aurora: soft mesh / noise field (backgrounds-effects) ---------- */
+  [data-motif="aurora"] .domain-card__motif::before {
+    /* Two soft mesh blobs. Calm, no harsh glow. */
+    background:
+      radial-gradient(40% 50% at 84% 12%, oklch(var(--motif-l) 0.07 var(--card-hue) / calc(0.26 * var(--motif-a))), transparent 70%),
+      radial-gradient(36% 46% at 64% 4%, oklch(var(--motif-l) 0.06 calc(var(--card-hue) + 40) / calc(0.2 * var(--motif-a))), transparent 72%);
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  [data-motif="aurora"] .domain-card__motif::after {
+    /* A faint dithered noise dot field over the mesh. */
+    background-image: radial-gradient(var(--motif-sheen) 0.5px, transparent 0.6px);
+    background-size: 4px 4px;
+    -webkit-mask-image: radial-gradient(120% 100% at 100% 0, #000 30%, transparent 80%);
+    mask-image: radial-gradient(120% 100% at 100% 0, #000 30%, transparent 80%);
+  }
+  .domain-card[data-motif="aurora"]:hover .domain-card__motif::before {
+    transform: translate(-6px, 4px) scale(1.06);
+  }
+
+  /* ---------- shimmer: skeleton + progress motif (ui-states-feedback) ---------- */
+  [data-motif="shimmer"] .domain-card__motif::before {
+    /* Skeleton lines (loading placeholders), top-right. */
+    background:
+      linear-gradient(oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.2 * var(--motif-a))), oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.2 * var(--motif-a)))),
+      linear-gradient(oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.15 * var(--motif-a))), oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.15 * var(--motif-a)))),
+      linear-gradient(oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.15 * var(--motif-a))), oklch(var(--motif-l) 0.02 var(--card-hue) / calc(0.15 * var(--motif-a))));
+    background-repeat: no-repeat;
+    background-size: 46% 7px, 38% 7px, 30% 7px;
+    background-position: 100% 16%, 100% 36%, 100% 56%;
+    border-radius: 4px;
+  }
+  [data-motif="shimmer"] .domain-card__motif::after {
+    /* A travelling shimmer sweep across the skeleton area. */
+    inset: 8% -40% auto auto;
+    inline-size: 50%;
+    block-size: 56%;
+    background: linear-gradient(
+      105deg,
+      transparent 35%,
+      var(--motif-sheen) 50%,
+      transparent 65%
+    );
+    transform: translateX(0);
+  }
+  /* Calm by default; the sweep runs slowly and is a pure transform/opacity. */
+  @media (prefers-reduced-motion: no-preference) {
+    [data-motif="shimmer"] .domain-card__motif::after {
+      animation: card-shimmer 3.4s var(--ease-out-quart) infinite;
+    }
+  }
+  @keyframes card-shimmer {
+    0%,
+    18% {
+      transform: translateX(-30%);
+      opacity: 0;
+    }
+    40% {
+      opacity: 1;
+    }
+    72%,
+    100% {
+      transform: translateX(120%);
+      opacity: 0;
+    }
+  }
+
+  /* ---------- frames: nested device frames + breakpoint ticks (responsive-foundations) ---------- */
+  [data-motif="frames"] .domain-card__motif::before {
+    /* Two concentric rounded device frames, top-right. */
+    inset: 12% 10% auto auto;
+    inline-size: 44%;
+    block-size: 48%;
+    border: var(--border-hair) solid oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.34 * var(--motif-a)));
+    border-radius: var(--radius-m);
+    box-shadow:
+      inset 0 0 0 7px transparent,
+      0 0 0 0 transparent;
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  [data-motif="frames"] .domain-card__motif::after {
+    /* Inner frame + a row of breakpoint ticks along the top. */
+    inset: 19% 18% auto auto;
+    inline-size: 28%;
+    block-size: 30%;
+    border: var(--border-hair) solid oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.26 * var(--motif-a)));
+    border-radius: var(--radius-s);
+    background:
+      linear-gradient(90deg, oklch(var(--motif-l) 0.04 var(--card-hue) / calc(0.36 * var(--motif-a))) 1px, transparent 1px) top left / 25% 5px repeat-x;
+    transition: transform var(--dur-slow) var(--ease-out-expo);
+  }
+  .domain-card[data-motif="frames"]:hover .domain-card__motif::before {
+    transform: scaleX(1.05);
+  }
+  .domain-card[data-motif="frames"]:hover .domain-card__motif::after {
+    transform: scaleX(0.92);
+  }
+
+  /* ---- Featured tiles get a slightly richer / larger motif (they have room) ---- */
+  .domain-card--featured .domain-card__motif::before {
+    transform-origin: top right;
+  }
+  .domain-card--featured[data-motif="type"] .domain-card__motif::before {
+    font-size: 11rem;
+  }
+  .domain-card--featured[data-motif="grid"] .domain-card__motif::before {
+    background-size: 30px 30px;
+  }
+
+  /* ---- Top row: concept count ---- */
   .domain-card__top {
     display: flex;
     align-items: center;
     gap: var(--space-xs);
-  }
-
-  .domain-card__dot {
-    flex: none;
-    inline-size: 0.6rem;
-    block-size: 0.6rem;
-    border-radius: 50%;
   }
 
   .domain-card__count {
@@ -174,14 +520,25 @@ const countLabel = `${count} ${count === 1 ? "concept" : "concepts"}`;
     }
   }
 
+  /* ---- Reduced motion: freeze every motif into a calm, static state ---- */
   @media (prefers-reduced-motion: reduce) {
     .domain-card,
-    .domain-card__cue {
+    .domain-card__cue,
+    .domain-card__motif,
+    .domain-card__motif::before,
+    .domain-card__motif::after {
       transition: none;
+      animation: none;
     }
     .domain-card:hover,
-    .domain-card:hover .domain-card__cue {
+    .domain-card:hover .domain-card__cue,
+    .domain-card:hover .domain-card__motif::before,
+    .domain-card:hover .domain-card__motif::after {
       transform: none;
+    }
+    /* Park the shimmer sweep off-canvas so it doesn't sit as a static streak. */
+    [data-motif="shimmer"] .domain-card__motif::after {
+      opacity: 0;
     }
   }
 </style>

@@ -118,6 +118,81 @@ function isLargeCode(token: Token): boolean {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Code labels — the View-code mini-window and the standalone "View code" row
+// read better with a one-line description than a bare language tag. We lift
+// that label from the prose immediately preceding the code block: prefer a
+// trailing subheading (### ...), else the last short sentence. Falls back to
+// the language when no usable text exists.
+// ---------------------------------------------------------------------------
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ") // drop tags
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Pull the most descriptive heading text from a prose token, if any. */
+function headingText(html: string): string | null {
+  const m = html.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
+  if (!m) return null;
+  const text = stripHtml(m[1]);
+  return text || null;
+}
+
+/** Trim a label to a comfortable one-line length without cutting mid-word. */
+function clampLabel(text: string, max = 72): string {
+  if (text.length <= max) return text;
+  const slice = text.slice(0, max);
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > 24 ? slice.slice(0, lastSpace) : slice).trim() + "…";
+}
+
+/**
+ * Derive a one-line label for the code token at `idx` from the prose that comes
+ * just before it within the same section. Returns undefined when nothing useful
+ * is available (the components fall back to the language).
+ */
+function labelForCode(tokens: Token[], idx: number): string | undefined {
+  // Walk back to the nearest prose token immediately preceding the code.
+  for (let i = idx - 1; i >= 0; i--) {
+    const t = tokens[i];
+    if (t.type === "code") break; // another code block sits between — give up
+    if (t.type !== "prose") continue;
+    // Prefer the last subheading inside that prose; else its last sentence.
+    const heading = headingText(t.html);
+    if (heading) return clampLabel(heading);
+    const text = stripHtml(t.html);
+    if (text) {
+      // First sentence / clause, kept short.
+      const firstSentence = text.split(/(?<=[.!?])\s+/)[0] ?? text;
+      return clampLabel(firstSentence);
+    }
+    break;
+  }
+  return undefined;
+}
+
+// Precompute a label per CODE token across all sections (in the frontmatter,
+// where TS generics like WeakMap<Token, string> parse cleanly — inside the
+// .astro template body they would be mis-read as JSX tags). The template just
+// reads codeLabels.get(token).
+const codeLabels = new WeakMap<Token, string>();
+for (const section of concept.sections) {
+  section.tokens.forEach((token, i) => {
+    if (token.type === "code") {
+      const l = labelForCode(section.tokens, i);
+      if (l) codeLabels.set(token, l);
+    }
+  });
+}
+
 interface SplitTokens {
   lead: Token[];
   extra: Token[];
@@ -216,6 +291,10 @@ function splitPrimaryTokens(section: Section): SplitTokens {
         {
           plan.map(({ section, primary }) => {
             // Token renderer shared by primary lead/extra and secondary bodies.
+            // Leads with the visual: runnable code becomes the live demo (the
+            // star) with a "View code" button; standalone code becomes a
+            // compact labelled "View code" row — never an inline wall. Labels
+            // are precomputed in the frontmatter (codeLabels).
             const renderToken = (token: Token) =>
               token.type === "prose" ? (
                 <div class="prose" set:html={token.html} />
@@ -225,6 +304,7 @@ function splitPrimaryTokens(section: Section): SplitTokens {
                     code={token.code}
                     highlighted={token.highlighted}
                     lang={token.lang}
+                    label={codeLabels.get(token)}
                     client:visible
                   />
                 </div>
@@ -234,6 +314,7 @@ function splitPrimaryTokens(section: Section): SplitTokens {
                     code={token.code}
                     highlighted={token.highlighted}
                     lang={token.lang}
+                    label={codeLabels.get(token)}
                     client:visible
                   />
                 </div>
@@ -625,7 +706,8 @@ function splitPrimaryTokens(section: Section): SplitTokens {
   :global(.livepreview__frame) {
     display: block;
     inline-size: 100%;
-    block-size: 380px;
+    /* The demo is the star: give it generous height by default. */
+    block-size: 420px;
     border: 0;
   }
 
@@ -648,84 +730,310 @@ function splitPrimaryTokens(section: Section): SplitTokens {
     block-size: 760px;
   }
 
-  /* ---- CodeBlock ---- */
-  :global(.codeblock) {
-    margin: 0;
-    border: var(--border-hair) solid var(--border);
-    border-radius: var(--radius-m);
-    overflow: hidden;
-    background: var(--bg-elev);
-  }
-
-  /* When the code block is embedded inside a live preview, square the top edge
-     so it reads as one card with the iframe above it. */
-  :global(.livepreview .codeblock--inpreview) {
-    border-inline: 0;
-    border-block-end: 0;
-    border-radius: 0;
-    border-block-start: var(--border-hair) solid var(--border);
-  }
-
-  :global(.codeblock__bar) {
+  /* Footer under a live demo: holds the calm "View code" button. Reads as the
+     base of the same card as the iframe. */
+  :global(.livepreview__foot) {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: var(--space-xs);
-    padding: var(--space-2xs) var(--space-m);
+    padding: var(--space-xs) var(--space-m);
+    border-block-start: var(--border-hair) solid var(--border);
+    background: var(--surface);
+  }
+
+  /* ---- "View code" triggers (CodeModal) ------------------------------------
+     Two shapes: a compact button under a live demo, and a full-width labelled
+     row that replaces a standalone code wall. Both open the mini-window. */
+
+  :global(.codemodal-trigger) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-block-size: 44px;
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--bg-elev);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  :global(.codemodal-trigger:hover) {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+
+  :global(.codemodal-trigger:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  :global(.codemodal-trigger--button) {
+    padding-inline: var(--space-m);
+  }
+
+  /* Full-width labelled row for standalone code: the one-line description leads,
+     the "View code" cue sits at the end. */
+  :global(.codemodal-trigger--row) {
+    inline-size: 100%;
+    justify-content: flex-start;
+    padding: var(--space-s) var(--space-m);
+    text-align: start;
+  }
+
+  :global(.codemodal-trigger__label) {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    color: var(--text-strong);
+    overflow-wrap: anywhere;
+  }
+
+  :global(.codemodal-trigger__cue) {
+    flex: none;
+    color: var(--accent);
+    text-transform: uppercase;
+    font-size: 0.82em;
+    letter-spacing: 0.06em;
+  }
+
+  /* CSS-drawn "code" glyph: a small chevron-pair "< >" hinting at source. */
+  :global(.codemodal-trigger__icon) {
+    flex: none;
+    inline-size: 14px;
+    block-size: 10px;
+    position: relative;
+  }
+  :global(.codemodal-trigger__icon::before),
+  :global(.codemodal-trigger__icon::after) {
+    content: "";
+    position: absolute;
+    inset-block-start: 1px;
+    inline-size: 6px;
+    block-size: 6px;
+    border-block-end: 2px solid var(--muted);
+  }
+  :global(.codemodal-trigger__icon::before) {
+    inset-inline-start: 0;
+    border-inline-start: 2px solid var(--muted);
+    transform: rotate(45deg);
+  }
+  :global(.codemodal-trigger__icon::after) {
+    inset-inline-end: 0;
+    border-inline-end: 2px solid var(--muted);
+    transform: rotate(-45deg);
+  }
+  :global(.codemodal-trigger:hover .codemodal-trigger__icon::before),
+  :global(.codemodal-trigger:hover .codemodal-trigger__icon::after) {
+    border-color: var(--accent);
+  }
+
+  /* ---- CodeModal mini-window (native <dialog>) ----------------------------- */
+  :global(.codemodal) {
+    /* Reset the UA dialog box; we paint our own floating window. */
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    max-inline-size: min(880px, 92vw);
+    inline-size: min(880px, 92vw);
+    max-block-size: 70vh;
+    /* Center in the viewport. */
+    margin: auto;
+  }
+
+  :global(.codemodal::backdrop) {
+    /* Dim + soften the page behind the window. */
+    background: color-mix(in oklch, var(--bg) 62%, transparent);
+    backdrop-filter: blur(3px);
+  }
+
+  :global(.codemodal__panel) {
+    display: flex;
+    flex-direction: column;
+    max-block-size: 70vh;
+    border: var(--border-hair) solid var(--border-strong);
+    border-radius: var(--radius-l);
+    background: var(--bg-elev);
+    box-shadow: 0 24px 60px -24px color-mix(in oklch, var(--bg) 70%, black);
+    overflow: hidden;
+  }
+
+  :global(.codemodal__bar) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+    padding: var(--space-s) var(--space-m);
     border-block-end: var(--border-hair) solid var(--border);
     background: var(--surface);
   }
 
-  :global(.codeblock__lang) {
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    letter-spacing: 0.03em;
-    color: var(--muted);
+  /* Three quiet window dots — pure decoration, hidden from a11y tree. */
+  :global(.codemodal__dots) {
+    flex: none;
+    display: inline-flex;
+    gap: 6px;
+  }
+  :global(.codemodal__dots span) {
+    inline-size: 9px;
+    block-size: 9px;
+    border-radius: 50%;
+    background: var(--border-strong);
   }
 
-  :global(.codeblock__copy) {
-    min-block-size: 32px;
+  :global(.codemodal__title) {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    font-weight: 550;
+    line-height: 1.3;
+    color: var(--text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.codemodal__lang) {
+    flex: none;
+    font-size: 0.82em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  :global(.codemodal__actions) {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+
+  :global(.codemodal__copy) {
+    min-block-size: 36px;
     padding-inline: var(--space-s);
     border: var(--border-hair) solid var(--border);
     border-radius: var(--radius-s);
     background: var(--bg-elev);
     color: var(--text);
+    font-family: var(--font-mono);
     font-size: var(--step--1);
+    cursor: pointer;
     transition: border-color var(--dur-fast) var(--ease-out-quart),
       background-color var(--dur-fast) var(--ease-out-quart);
   }
 
-  :global(.codeblock__copy:hover) {
+  :global(.codemodal__copy:hover) {
     border-color: var(--border-strong);
     background: var(--surface-2);
   }
 
-  :global(.codeblock__copy:focus-visible) {
+  :global(.codemodal__close) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 36px;
+    block-size: 36px;
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--bg-elev);
+    cursor: pointer;
+    transition: border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  :global(.codemodal__close:hover) {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+
+  :global(.codemodal__copy:focus-visible),
+  :global(.codemodal__close:focus-visible) {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
 
-  :global(.codeblock__code) {
-    /* Long code lines scroll horizontally within the card.
-       overflow-x: auto contains the scroll so no document-level overflow leaks.
-       min-inline-size: 0 prevents the flex/grid child from overflowing its track.
-       overflow-y stays visible (default) so no vertical content is clipped. */
-    overflow-x: auto;
-    min-inline-size: 0;
-    max-inline-size: 100%;
+  /* CSS-drawn close "x": two bars crossed. */
+  :global(.codemodal__close-x) {
+    position: relative;
+    inline-size: 14px;
+    block-size: 14px;
+  }
+  :global(.codemodal__close-x::before),
+  :global(.codemodal__close-x::after) {
+    content: "";
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 0;
+    inline-size: 100%;
+    block-size: 2px;
+    background: var(--text);
+  }
+  :global(.codemodal__close-x::before) {
+    transform: translateY(-50%) rotate(45deg);
+  }
+  :global(.codemodal__close-x::after) {
+    transform: translateY(-50%) rotate(-45deg);
   }
 
-  /* The shiki <pre> already carries its own padding/border via global.css;
-     reset the border here since the figure provides the frame. */
-  :global(.codeblock__code pre.shiki) {
+  /* Scrollable code region — this is what makes the window feel like a real
+     floating code pane. */
+  :global(.codemodal__code) {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow: auto;
+    background: var(--bg-elev);
+  }
+
+  :global(.codemodal__code pre.shiki) {
     margin: 0;
     border: 0;
     border-radius: 0;
+    min-block-size: 100%;
+  }
+
+  /* Open animation: a gentle fade + lift. Skipped under reduced motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.codemodal[open]) {
+      animation: codemodal-in var(--dur-mid) var(--ease-out-quart);
+    }
+    :global(.codemodal[open]::backdrop) {
+      animation: codemodal-backdrop-in var(--dur-mid) var(--ease-out-quart);
+    }
+  }
+
+  @keyframes codemodal-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes codemodal-backdrop-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
     :global(.livepreview__btn),
-    :global(.codeblock__copy) {
+    :global(.codemodal-trigger),
+    :global(.codemodal__copy),
+    :global(.codemodal__close) {
       transition: none;
     }
   }

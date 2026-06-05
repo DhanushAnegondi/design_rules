@@ -13,6 +13,14 @@
 import Base from "@/layouts/Base.astro";
 import { DOMAINS } from "@/lib/domains";
 import { getAllConcepts, conceptsByDomain } from "@/lib/parse-library";
+import {
+  normalizeEffort,
+  normalizeMaturity,
+  effortOptions,
+  maturityOptions,
+  EFFORT_LABEL,
+  MATURITY_LABEL,
+} from "@/lib/filters";
 
 const all = await getAllConcepts();
 const byDomain = conceptsByDomain(all);
@@ -23,6 +31,10 @@ const groups = DOMAINS
   .filter(({ concepts }) => concepts.length > 0);
 
 const totalConcepts = all.length;
+
+// Collect distinct normalized bucket keys across ALL concepts, in canonical order.
+const allEffortValues = effortOptions(all.map((c) => c.meta.effort));
+const allMaturityValues = maturityOptions(all.map((c) => c.meta.maturity));
 ---
 
 <Base
@@ -44,30 +56,74 @@ const totalConcepts = all.length;
       </p>
     </header>
 
-    {/* ---- Search / filter input ---- */}
-    <div class="guide-search" role="search">
-      <label class="guide-search__label" for="guide-input">
-        Filter concepts
-      </label>
-      <div class="guide-search__row">
-        <input
-          id="guide-input"
-          class="guide-search__input"
-          type="search"
-          placeholder="Type a concept name or keyword…"
-          autocomplete="off"
-          data-guide-input
-        />
-        <button
-          class="guide-search__clear"
-          type="button"
-          data-guide-clear
-          aria-label="Clear filter"
-          hidden
-        >
-          Clear
-        </button>
+    {/* ---- Search / filter controls ---- */}
+    <div class="guide-search" role="search" data-guide-search>
+      <div class="guide-search__controls">
+        {/* Text search */}
+        <div class="guide-search__field">
+          <label class="guide-search__label" for="guide-input">
+            Filter concepts
+          </label>
+          <div class="guide-search__row">
+            <input
+              id="guide-input"
+              class="guide-search__input"
+              type="search"
+              placeholder="Type a concept name or keyword…"
+              autocomplete="off"
+              data-guide-input
+            />
+          </div>
+        </div>
+
+        {/* Effort dropdown */}
+        {allEffortValues.length > 0 && (
+          <div class="guide-search__field">
+            <label class="guide-search__label" for="guide-effort">Effort</label>
+            <select
+              id="guide-effort"
+              class="guide-filter-select"
+              data-guide-effort
+            >
+              <option value="">All</option>
+              {allEffortValues.map((key) => (
+                <option value={key}>{EFFORT_LABEL[key]}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Maturity dropdown */}
+        {allMaturityValues.length > 0 && (
+          <div class="guide-search__field">
+            <label class="guide-search__label" for="guide-maturity">Maturity</label>
+            <select
+              id="guide-maturity"
+              class="guide-filter-select"
+              data-guide-maturity
+            >
+              <option value="">All</option>
+              {allMaturityValues.map((key) => (
+                <option value={key}>{MATURITY_LABEL[key]}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Clear all */}
+        <div class="guide-search__field guide-search__field--clear">
+          <button
+            class="guide-search__clear"
+            type="button"
+            data-guide-clear
+            aria-label="Clear all filters"
+            hidden
+          >
+            Clear
+          </button>
+        </div>
       </div>
+
       <p
         class="guide-search__count"
         aria-live="polite"
@@ -79,7 +135,6 @@ const totalConcepts = all.length;
     {/* ---- Domain groups ---- */}
     <div class="guide-groups" data-guide-groups>
       {groups.map(({ domain, concepts }) => {
-        const dot = `oklch(70% 0.13 ${domain.accentHue})`;
         return (
           <section
             class="guide-group"
@@ -87,11 +142,6 @@ const totalConcepts = all.length;
             aria-labelledby={`group-${domain.id}`}
           >
             <h2 class="guide-group__heading" id={`group-${domain.id}`}>
-              <span
-                class="guide-group__dot"
-                style={`background:${dot}`}
-                aria-hidden="true"
-              ></span>
               <a href={`/${domain.id}`}>{domain.title}</a>
               <span class="guide-group__count">{concepts.length}</span>
             </h2>
@@ -103,6 +153,8 @@ const totalConcepts = all.length;
                     class="guide-list__term"
                     data-title={c.title.toLowerCase()}
                     data-def={(c.definition ?? "").toLowerCase()}
+                    data-effort={normalizeEffort(c.meta.effort) ?? ""}
+                    data-maturity={normalizeMaturity(c.meta.maturity) ?? ""}
                     data-concept-row
                   >
                     <a
@@ -141,13 +193,24 @@ const totalConcepts = all.length;
     var input = document.querySelector("[data-guide-input]") as HTMLInputElement | null;
     if (!input) return;
 
+    var effortSel = document.querySelector("[data-guide-effort]") as HTMLSelectElement | null;
+    var maturitySel = document.querySelector("[data-guide-maturity]") as HTMLSelectElement | null;
     var clearBtns = document.querySelectorAll("[data-guide-clear]");
     var countEl = document.querySelector("[data-guide-count]") as HTMLElement | null;
     var emptyEl = document.querySelector("[data-guide-empty]") as HTMLElement | null;
     var groups = document.querySelectorAll("[data-guide-group]");
 
-    function applyFilter(q: string) {
-      var query = q.trim().toLowerCase();
+    function hasAnyFilter() {
+      var q = (input?.value ?? "").trim();
+      var e = effortSel?.value ?? "";
+      var m = maturitySel?.value ?? "";
+      return q !== "" || e !== "" || m !== "";
+    }
+
+    function applyFilter() {
+      var query = (input?.value ?? "").trim().toLowerCase();
+      var effortFilter = effortSel?.value ?? "";
+      var maturityFilter = maturitySel?.value ?? "";
       var totalVisible = 0;
       var totalItems = 0;
 
@@ -160,9 +223,23 @@ const totalConcepts = all.length;
           var defEl = el.nextElementSibling as HTMLElement | null;
           totalItems++;
 
-          var matchTitle = !query || (el.dataset.title ?? "").includes(query);
-          var matchDef = !query || (el.dataset.def ?? "").includes(query);
-          var visible = matchTitle || matchDef;
+          // Text match: title OR definition
+          var matchText =
+            !query ||
+            (el.dataset.title ?? "").includes(query) ||
+            (el.dataset.def ?? "").includes(query);
+
+          // Effort match
+          var matchEffort =
+            effortFilter === "" ||
+            (el.dataset.effort ?? "") === effortFilter;
+
+          // Maturity match
+          var matchMaturity =
+            maturityFilter === "" ||
+            (el.dataset.maturity ?? "") === maturityFilter;
+
+          var visible = matchText && matchEffort && matchMaturity;
 
           el.hidden = !visible;
           if (defEl) defEl.hidden = !visible;
@@ -176,27 +253,45 @@ const totalConcepts = all.length;
         (group as HTMLElement).hidden = groupVisible === 0;
       });
 
+      var active = hasAnyFilter();
+
       // Update live count
       if (countEl) {
-        countEl.textContent = query
+        countEl.textContent = active
           ? "Showing " + totalVisible + " of " + totalItems + " concepts"
           : "";
       }
 
       // Show/hide empty state
       if (emptyEl) {
-        emptyEl.hidden = totalVisible > 0 || !query;
+        emptyEl.hidden = totalVisible > 0 || !active;
       }
 
       // Show/hide clear buttons
       clearBtns.forEach(function (btn) {
-        (btn as HTMLButtonElement).hidden = !query;
+        (btn as HTMLButtonElement).hidden = !active;
       });
+
+      // Visual active state on selects
+      if (effortSel) effortSel.classList.toggle("is-active", effortSel.value !== "");
+      if (maturitySel) maturitySel.classList.toggle("is-active", maturitySel.value !== "");
     }
 
     input.addEventListener("input", function () {
-      applyFilter(input!.value);
+      applyFilter();
     });
+
+    if (effortSel) {
+      effortSel.addEventListener("change", function () {
+        applyFilter();
+      });
+    }
+
+    if (maturitySel) {
+      maturitySel.addEventListener("change", function () {
+        applyFilter();
+      });
+    }
 
     clearBtns.forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -204,12 +299,14 @@ const totalConcepts = all.length;
           input.value = "";
           input.focus();
         }
-        applyFilter("");
+        if (effortSel) effortSel.value = "";
+        if (maturitySel) maturitySel.value = "";
+        applyFilter();
       });
     });
 
     // Initial state
-    applyFilter(input.value);
+    applyFilter();
   })();
 </script>
 
@@ -252,10 +349,34 @@ const totalConcepts = all.length;
     margin-inline-end: 0.25ch;
   }
 
-  /* ---- Search bar ---- */
+  /* ---- Search / filter controls ---- */
   .guide-search {
     margin-block-end: var(--space-3xl);
-    max-inline-size: 40rem;
+  }
+
+  /* Responsive row of filter fields */
+  .guide-search__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-m) var(--space-l);
+  }
+
+  .guide-search__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    /* Text field grows to fill available space; selects stay compact */
+    min-inline-size: 0;
+  }
+
+  .guide-search__field:first-child {
+    flex: 1 1 18rem; /* text search grows */
+  }
+
+  /* Clear button field — no label, so vertically center the button */
+  .guide-search__field--clear {
+    justify-content: flex-end;
   }
 
   .guide-search__label {
@@ -265,7 +386,6 @@ const totalConcepts = all.length;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--faint);
-    margin-block-end: var(--space-xs);
   }
 
   .guide-search__row {
@@ -301,6 +421,45 @@ const totalConcepts = all.length;
   /* Remove the native × on type=search — we supply our own clear button. */
   .guide-search__input::-webkit-search-cancel-button {
     display: none;
+  }
+
+  /* Native select — mirrors domain page .filter-select */
+  .guide-filter-select {
+    min-block-size: 44px;
+    padding-inline: var(--space-s) var(--space-l);
+    padding-block: 0;
+    border: var(--border-hair) solid var(--border-strong);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--step--1);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--space-s) center;
+    background-size: 16px 16px;
+    transition:
+      border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .guide-filter-select:hover {
+    border-color: var(--border-strong);
+    background-color: var(--surface-2);
+  }
+
+  .guide-filter-select:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-color: var(--accent);
+  }
+
+  .guide-filter-select.is-active {
+    border-color: var(--accent);
+    color: var(--text-strong);
   }
 
   .guide-search__clear {
@@ -345,7 +504,6 @@ const totalConcepts = all.length;
   .guide-group__heading {
     display: flex;
     align-items: center;
-    gap: var(--space-s);
     font-size: var(--step-1);
     font-family: var(--font-display);
     font-weight: 560;
@@ -369,13 +527,6 @@ const totalConcepts = all.length;
     outline: 2px solid var(--focus);
     outline-offset: 2px;
     border-radius: 2px;
-  }
-
-  .guide-group__dot {
-    flex: none;
-    inline-size: 0.55rem;
-    block-size: 0.55rem;
-    border-radius: 50%;
   }
 
   .guide-group__count {
@@ -492,7 +643,8 @@ const totalConcepts = all.length;
 
   @media (prefers-reduced-motion: reduce) {
     .guide-search__input,
-    .guide-search__clear {
+    .guide-search__clear,
+    .guide-filter-select {
       transition: none;
     }
   }

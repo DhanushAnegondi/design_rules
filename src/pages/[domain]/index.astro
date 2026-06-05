@@ -15,6 +15,14 @@ import Base from "@/layouts/Base.astro";
 import ConceptCard from "@/components/ConceptCard.astro";
 import { DOMAINS, type Domain } from "@/lib/domains";
 import { getAllConcepts, type Concept } from "@/lib/parse-library";
+import {
+  normalizeEffort,
+  normalizeMaturity,
+  effortOptions,
+  maturityOptions,
+  EFFORT_LABEL,
+  MATURITY_LABEL,
+} from "@/lib/filters";
 
 export async function getStaticPaths() {
   return DOMAINS.map((d) => ({
@@ -34,23 +42,12 @@ const concepts: Concept[] = all
   .filter((c) => c.domainId === domain.id)
   .sort((a, b) => a.title.localeCompare(b.title));
 
-// Collect unique Effort and Maturity values for the filter bar.
-// Lower-case to match data-attributes; filter out empty strings.
-const effortValues = [...new Set(
-  concepts
-    .map((c) => c.meta.effort?.toLowerCase().trim() ?? "")
-    .filter(Boolean)
-)].sort();
-
-const maturityValues = [...new Set(
-  concepts
-    .map((c) => c.meta.maturity?.toLowerCase().trim() ?? "")
-    .filter(Boolean)
-)].sort();
+// Collect distinct normalized bucket keys actually present in this domain,
+// in canonical order, for the filter dropdowns.
+const effortValues = effortOptions(concepts.map((c) => c.meta.effort));
+const maturityValues = maturityOptions(concepts.map((c) => c.meta.maturity));
 
 const hasFilters = effortValues.length > 0 || maturityValues.length > 0;
-
-const dot = `oklch(70% 0.13 ${domain.accentHue})`;
 ---
 
 <Base title={domain.title} description={domain.blurb}>
@@ -66,7 +63,6 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
 
     {/* ---- Header ---- */}
     <header class="domain-header">
-      <span class="domain-dot" style={`background:${dot}`} aria-hidden="true"></span>
       <h1 class="domain-header__title">{domain.title}</h1>
       <p class="domain-header__blurb">{domain.blurb}</p>
       <p class="domain-header__count">
@@ -81,39 +77,35 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
         <div class="filter-bar__groups">
           {effortValues.length > 0 && (
             <div class="filter-group">
-              <span class="filter-group__label" id="effort-label">Effort</span>
-              <div class="filter-group__buttons" role="group" aria-labelledby="effort-label">
-                {effortValues.map((v) => (
-                  <button
-                    class="filter-btn"
-                    type="button"
-                    data-filter-type="effort"
-                    data-filter-value={v}
-                    aria-pressed="false"
-                  >
-                    {v.charAt(0).toUpperCase() + v.slice(1)}
-                  </button>
+              <label class="filter-group__label" for="filter-effort">Effort</label>
+              <select
+                id="filter-effort"
+                class="filter-select"
+                data-filter-type="effort"
+                data-filter-select
+              >
+                <option value="">All</option>
+                {effortValues.map((key) => (
+                  <option value={key}>{EFFORT_LABEL[key]}</option>
                 ))}
-              </div>
+              </select>
             </div>
           )}
 
           {maturityValues.length > 0 && (
             <div class="filter-group">
-              <span class="filter-group__label" id="maturity-label">Maturity</span>
-              <div class="filter-group__buttons" role="group" aria-labelledby="maturity-label">
-                {maturityValues.map((v) => (
-                  <button
-                    class="filter-btn"
-                    type="button"
-                    data-filter-type="maturity"
-                    data-filter-value={v}
-                    aria-pressed="false"
-                  >
-                    {v.charAt(0).toUpperCase() + v.slice(1)}
-                  </button>
+              <label class="filter-group__label" for="filter-maturity">Maturity</label>
+              <select
+                id="filter-maturity"
+                class="filter-select"
+                data-filter-type="maturity"
+                data-filter-select
+              >
+                <option value="">All</option>
+                {maturityValues.map((key) => (
+                  <option value={key}>{MATURITY_LABEL[key]}</option>
                 ))}
-              </div>
+              </select>
             </div>
           )}
         </div>
@@ -126,7 +118,7 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
             aria-label="Clear all filters"
             hidden
           >
-            Clear filters
+            All
           </button>
         </div>
 
@@ -145,8 +137,8 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
       <ul class="concept-grid" role="list" data-concept-list>
         {concepts.map((c) => (
           <li
-            data-effort={c.meta.effort?.toLowerCase().trim() ?? ""}
-            data-maturity={c.meta.maturity?.toLowerCase().trim() ?? ""}
+            data-effort={normalizeEffort(c.meta.effort) ?? ""}
+            data-maturity={normalizeMaturity(c.meta.maturity) ?? ""}
           >
             <ConceptCard concept={c} />
           </li>
@@ -169,18 +161,19 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
 
     var clearBtn = bar.querySelector("[data-filter-clear]") as HTMLButtonElement | null;
     var countEl = bar.querySelector("[data-filter-count]") as HTMLElement | null;
+    var selects = bar.querySelectorAll("[data-filter-select]");
 
-    // Active filter state: { effort: Set<string>, maturity: Set<string> }
-    var active: Record<string, Set<string>> = { effort: new Set(), maturity: new Set() };
+    // Active filter state: effort and maturity hold the selected string ("" = all)
+    var active: Record<string, string> = { effort: "", maturity: "" };
 
     function updateCount() {
       if (!countEl) return;
       var items = list!.querySelectorAll("li");
       var visible = 0;
       items.forEach(function (li) {
-        if ((li as HTMLElement).hidden === false) visible++;
+        if (!(li as HTMLElement).hidden) visible++;
       });
-      var hasActive = active.effort.size > 0 || active.maturity.size > 0;
+      var hasActive = active.effort !== "" || active.maturity !== "";
       countEl.textContent = hasActive
         ? "Showing " + visible + " of " + items.length + " concepts"
         : "";
@@ -188,7 +181,7 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
 
     function applyFilters() {
       var items = list!.querySelectorAll("li");
-      var hasActive = active.effort.size > 0 || active.maturity.size > 0;
+      var hasActive = active.effort !== "" || active.maturity !== "";
 
       items.forEach(function (li) {
         var el = li as HTMLElement;
@@ -197,11 +190,11 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
           return;
         }
         var effortOk =
-          active.effort.size === 0 ||
-          active.effort.has(el.dataset.effort ?? "");
+          active.effort === "" ||
+          (el.dataset.effort ?? "") === active.effort;
         var maturityOk =
-          active.maturity.size === 0 ||
-          active.maturity.has(el.dataset.maturity ?? "");
+          active.maturity === "" ||
+          (el.dataset.maturity ?? "") === active.maturity;
         el.hidden = !(effortOk && maturityOk);
       });
 
@@ -212,41 +205,39 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
       updateCount();
     }
 
-    // Wire toggle buttons
-    var btns = bar.querySelectorAll(".filter-btn");
-    btns.forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var el = btn as HTMLButtonElement;
+    function syncSelectState() {
+      selects.forEach(function (sel) {
+        var el = sel as HTMLSelectElement;
+        el.classList.toggle("is-active", el.value !== "");
+      });
+    }
+
+    // Wire select dropdowns
+    selects.forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        var el = sel as HTMLSelectElement;
         var type = el.dataset.filterType as "effort" | "maturity";
-        var value = el.dataset.filterValue ?? "";
-        var isOn = el.getAttribute("aria-pressed") === "true";
-
-        if (isOn) {
-          active[type].delete(value);
-          el.setAttribute("aria-pressed", "false");
-        } else {
-          active[type].add(value);
-          el.setAttribute("aria-pressed", "true");
-        }
-
+        active[type] = el.value;
+        syncSelectState();
         applyFilters();
       });
     });
 
-    // Wire clear button
+    // Wire clear button — resets both selects to "All"
     if (clearBtn) {
       clearBtn.addEventListener("click", function () {
-        active.effort.clear();
-        active.maturity.clear();
-        btns.forEach(function (btn) {
-          (btn as HTMLButtonElement).setAttribute("aria-pressed", "false");
+        active.effort = "";
+        active.maturity = "";
+        selects.forEach(function (sel) {
+          (sel as HTMLSelectElement).value = "";
         });
+        syncSelectState();
         applyFilters();
       });
     }
 
-    // Initial count (no filters active — count el empty, clear hidden)
-    updateCount();
+    // Initial state
+    applyFilters();
   })();
 </script>
 
@@ -300,14 +291,6 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
     margin-block-end: var(--space-xl);
   }
 
-  .domain-dot {
-    display: block;
-    inline-size: 0.6rem;
-    block-size: 0.6rem;
-    border-radius: 50%;
-    margin-block-end: var(--space-s);
-  }
-
   .domain-header__title {
     font-size: var(--step-4);
     line-height: 1.04;
@@ -358,6 +341,7 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
   }
 
   .filter-group__label {
+    display: block;
     font-family: var(--font-mono);
     font-size: 0.78rem;
     letter-spacing: 0.06em;
@@ -365,54 +349,51 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
     color: var(--faint);
   }
 
-  .filter-group__buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2xs);
-  }
-
-  .filter-btn {
+  /* Native select — inherits all token colors, works in both themes */
+  .filter-select {
     min-block-size: 44px;
-    padding-inline: var(--space-m);
-    border: var(--border-hair) solid var(--border);
-    border-radius: 999px;
+    padding-inline: var(--space-s) var(--space-l);
+    padding-block: 0;
+    border: var(--border-hair) solid var(--border-strong);
+    border-radius: var(--radius-s);
     background: var(--surface);
     color: var(--text);
+    font-family: var(--font-body);
     font-size: var(--step--1);
-    font-weight: 500;
     cursor: pointer;
+    /* Custom chevron via inline SVG background — avoids browser default arrow offset issues */
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--space-s) center;
+    background-size: 16px 16px;
     transition:
       border-color var(--dur-fast) var(--ease-out-quart),
-      background-color var(--dur-fast) var(--ease-out-quart),
-      color var(--dur-fast) var(--ease-out-quart);
+      background-color var(--dur-fast) var(--ease-out-quart);
   }
 
-  .filter-btn:hover {
+  .filter-select:hover {
     border-color: var(--border-strong);
-    background: var(--surface-2);
-    color: var(--text-strong);
+    background-color: var(--surface-2);
   }
 
-  .filter-btn:focus-visible {
+  .filter-select:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
-  }
-
-  .filter-btn[aria-pressed="true"] {
-    background: var(--accent);
     border-color: var(--accent);
-    color: var(--accent-contrast);
   }
 
-  .filter-btn[aria-pressed="true"]:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
+  /* Accent the select when a non-default value is active */
+  .filter-select.is-active {
+    border-color: var(--accent);
+    color: var(--text-strong);
   }
 
   .filter-bar__actions {
     display: flex;
-    align-items: center;
-    padding-block-start: 1.5rem; /* align with buttons row */
+    align-items: flex-end; /* align with bottom of select */
+    padding-block-end: 0;
   }
 
   .filter-clear {
@@ -502,7 +483,7 @@ const dot = `oklch(70% 0.13 ${domain.accentHue})`;
      display/hidden toggling which is inherently instant. The global rule in
      global.css already covers transition-duration, so this is belt-and-suspenders. */
   @media (prefers-reduced-motion: reduce) {
-    .filter-btn,
+    .filter-select,
     .filter-clear {
       transition: none;
     }

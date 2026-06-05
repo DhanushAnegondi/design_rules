@@ -55,7 +55,10 @@ step; never hand back work that only "builds" without being *seen* to be right.
 The loop never interrupts a running sub-agent. Verification happens on the returned artifact.
 
 ## Model policy (use the cheapest model that can do the job correctly)
-State the model when dispatching. Do not default everything to Opus.
+The authoritative decision matrix is **`docs/MODEL_ROUTING.md`** — consult it before
+dispatching any agent and state the chosen model + the rule it matched. Summary below.
+State the model when dispatching. Do not default everything to Opus, and do not compromise
+on Opus where taste decides the outcome.
 
 | Work | Model |
 |------|-------|

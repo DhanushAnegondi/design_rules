@@ -23,7 +23,6 @@ const {
 
 const fullTitle = `${title} — Design Library`;
 const domains = [...DOMAINS].sort((a, b) => a.order - b.order);
-const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
 ---
 
 <!doctype html>
@@ -83,14 +82,7 @@ const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
                 {
                   domains.map((d) => (
                     <li>
-                      <a class="nav-link" href={`/${d.id}`}>
-                        <span
-                          class="nav-dot"
-                          style={`background:${dot(d.accentHue)}`}
-                          aria-hidden="true"
-                        />
-                        {d.title}
-                      </a>
+                      <a class="nav-link" href={`/${d.id}`}>{d.title}</a>
                     </li>
                   ))
                 }
@@ -315,7 +307,6 @@ const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
       .nav-link {
         display: inline-flex;
         align-items: center;
-        gap: var(--space-xs);
         min-block-size: 44px;
         padding-inline: var(--space-s);
         border-radius: var(--radius-s);
@@ -337,13 +328,6 @@ const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
       .nav-link:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 2px;
-      }
-
-      .nav-dot {
-        flex: none;
-        inline-size: 0.55rem;
-        block-size: 0.55rem;
-        border-radius: 50%;
       }
 
       /* The two bar links collapse their horizontal padding a touch on the

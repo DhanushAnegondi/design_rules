@@ -12,7 +12,6 @@ import Base from "@/layouts/Base.astro";
 import { DOMAINS } from "@/lib/domains";
 
 const orderedDomains = [...DOMAINS].sort((a, b) => a.order - b.order);
-const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
 ---
 
 <Base title="Page not found" description="The page you requested does not exist in the design library.">
@@ -55,11 +54,6 @@ const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
         {orderedDomains.map((d) => (
           <li>
             <a class="domain-link" href={`/${d.id}`}>
-              <span
-                class="domain-link__dot"
-                style={`background:${dot(d.accentHue)}`}
-                aria-hidden="true"
-              ></span>
               {d.title}
             </a>
           </li>
@@ -195,7 +189,6 @@ const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
   .domain-link {
     display: flex;
     align-items: center;
-    gap: var(--space-xs);
     min-block-size: 44px;
     padding-inline: var(--space-s);
     border-radius: var(--radius-s);
@@ -215,13 +208,6 @@ const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
   .domain-link:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
-  }
-
-  .domain-link__dot {
-    flex: none;
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
-    border-radius: 50%;
   }
 
   @media (prefers-reduced-motion: reduce) {
