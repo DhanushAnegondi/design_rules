@@ -152,11 +152,6 @@ export default function CodeModal({
       >
         <div className="codemodal__panel">
           <header className="codemodal__bar">
-            <span className="codemodal__dots" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
             <h2 className="codemodal__title" id={titleId}>
               {title}
               <span className="codemodal__lang" aria-hidden="true">

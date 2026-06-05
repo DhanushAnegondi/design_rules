@@ -871,19 +871,6 @@ function splitPrimaryTokens(section: Section): SplitTokens {
     background: var(--surface);
   }
 
-  /* Three quiet window dots — pure decoration, hidden from a11y tree. */
-  :global(.codemodal__dots) {
-    flex: none;
-    display: inline-flex;
-    gap: 6px;
-  }
-  :global(.codemodal__dots span) {
-    inline-size: 9px;
-    block-size: 9px;
-    border-radius: 50%;
-    background: var(--border-strong);
-  }
-
   :global(.codemodal__title) {
     flex: 1 1 auto;
     min-inline-size: 0;
