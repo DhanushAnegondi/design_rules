@@ -1,0 +1,499 @@
+---
+/**
+ * guide.astro — the "when to use what" reference map.
+ *
+ * A dense, scannable table of every concept grouped by domain. Each row shows
+ * the concept title (linked to its page) and its one-line definition.
+ * Built entirely from getAllConcepts() + conceptsByDomain() — no INDEX.md parsing.
+ *
+ * A live filter/search input narrows rows by title + definition text.
+ * Progressively enhanced: without JS, all rows are visible and the input is
+ * present but inert (no hiding occurs, still useful for Ctrl+F search).
+ */
+import Base from "@/layouts/Base.astro";
+import { DOMAINS } from "@/lib/domains";
+import { getAllConcepts, conceptsByDomain } from "@/lib/parse-library";
+
+const all = await getAllConcepts();
+const byDomain = conceptsByDomain(all);
+
+// Build domain groups in DOMAINS order, skipping empty domains.
+const groups = DOMAINS
+  .map((d) => ({ domain: d, concepts: byDomain.get(d.id) ?? [] }))
+  .filter(({ concepts }) => concepts.length > 0);
+
+const totalConcepts = all.length;
+---
+
+<Base
+  title="When to use what"
+  description={`A quick-reference map of all ${totalConcepts} design concepts, grouped by domain, with their one-line definitions. Use it to pick the right technique before you build.`}
+>
+  <div class="container guide-page">
+
+    {/* ---- Page header ---- */}
+    <header class="guide-header">
+      <h1 class="guide-header__title">When to use what</h1>
+      <p class="guide-header__lede">
+        Every concept in the library — grouped by domain, each with its one-line
+        definition. Use this to find the right technique before you open a concept
+        page.
+      </p>
+      <p class="guide-header__count">
+        <span class="guide-count-num">{totalConcepts}</span> concepts across {groups.length} domains
+      </p>
+    </header>
+
+    {/* ---- Search / filter input ---- */}
+    <div class="guide-search" role="search">
+      <label class="guide-search__label" for="guide-input">
+        Filter concepts
+      </label>
+      <div class="guide-search__row">
+        <input
+          id="guide-input"
+          class="guide-search__input"
+          type="search"
+          placeholder="Type a concept name or keyword…"
+          autocomplete="off"
+          data-guide-input
+        />
+        <button
+          class="guide-search__clear"
+          type="button"
+          data-guide-clear
+          aria-label="Clear filter"
+          hidden
+        >
+          Clear
+        </button>
+      </div>
+      <p
+        class="guide-search__count"
+        aria-live="polite"
+        aria-atomic="true"
+        data-guide-count
+      ></p>
+    </div>
+
+    {/* ---- Domain groups ---- */}
+    <div class="guide-groups" data-guide-groups>
+      {groups.map(({ domain, concepts }) => {
+        const dot = `oklch(70% 0.13 ${domain.accentHue})`;
+        return (
+          <section
+            class="guide-group"
+            data-guide-group
+            aria-labelledby={`group-${domain.id}`}
+          >
+            <h2 class="guide-group__heading" id={`group-${domain.id}`}>
+              <span
+                class="guide-group__dot"
+                style={`background:${dot}`}
+                aria-hidden="true"
+              ></span>
+              <a href={`/${domain.id}`}>{domain.title}</a>
+              <span class="guide-group__count">{concepts.length}</span>
+            </h2>
+
+            <dl class="guide-list" data-concept-list>
+              {concepts.map((c) => (
+                <>
+                  <dt
+                    class="guide-list__term"
+                    data-title={c.title.toLowerCase()}
+                    data-def={(c.definition ?? "").toLowerCase()}
+                    data-concept-row
+                  >
+                    <a
+                      href={`/${c.domainId}/${c.slug}`}
+                      class="guide-list__link"
+                    >
+                      {c.title}
+                    </a>
+                  </dt>
+                  <dd
+                    class="guide-list__def"
+                    data-concept-def
+                  >
+                    {c.definition || <span class="guide-list__empty">—</span>}
+                  </dd>
+                </>
+              ))}
+            </dl>
+          </section>
+        );
+      })}
+    </div>
+
+    {/* ---- No results message (hidden unless JS filter produces 0 rows) ---- */}
+    <p class="guide-empty" hidden data-guide-empty>
+      No concepts match that filter. Try a different word, or{" "}
+      <button type="button" class="guide-empty__reset" data-guide-clear>clear the filter</button>.
+    </p>
+
+  </div>
+</Base>
+
+{/* ---- Filter script (progressive enhancement) ---- */}
+<script>
+  (function () {
+    var input = document.querySelector("[data-guide-input]") as HTMLInputElement | null;
+    if (!input) return;
+
+    var clearBtns = document.querySelectorAll("[data-guide-clear]");
+    var countEl = document.querySelector("[data-guide-count]") as HTMLElement | null;
+    var emptyEl = document.querySelector("[data-guide-empty]") as HTMLElement | null;
+    var groups = document.querySelectorAll("[data-guide-group]");
+
+    function applyFilter(q: string) {
+      var query = q.trim().toLowerCase();
+      var totalVisible = 0;
+      var totalItems = 0;
+
+      groups.forEach(function (group) {
+        var rows = group.querySelectorAll("[data-concept-row]");
+        var groupVisible = 0;
+
+        rows.forEach(function (row) {
+          var el = row as HTMLElement;
+          var defEl = el.nextElementSibling as HTMLElement | null;
+          totalItems++;
+
+          var matchTitle = !query || (el.dataset.title ?? "").includes(query);
+          var matchDef = !query || (el.dataset.def ?? "").includes(query);
+          var visible = matchTitle || matchDef;
+
+          el.hidden = !visible;
+          if (defEl) defEl.hidden = !visible;
+          if (visible) {
+            groupVisible++;
+            totalVisible++;
+          }
+        });
+
+        // Hide the whole group section if no rows are visible.
+        (group as HTMLElement).hidden = groupVisible === 0;
+      });
+
+      // Update live count
+      if (countEl) {
+        countEl.textContent = query
+          ? "Showing " + totalVisible + " of " + totalItems + " concepts"
+          : "";
+      }
+
+      // Show/hide empty state
+      if (emptyEl) {
+        emptyEl.hidden = totalVisible > 0 || !query;
+      }
+
+      // Show/hide clear buttons
+      clearBtns.forEach(function (btn) {
+        (btn as HTMLButtonElement).hidden = !query;
+      });
+    }
+
+    input.addEventListener("input", function () {
+      applyFilter(input!.value);
+    });
+
+    clearBtns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (input) {
+          input.value = "";
+          input.focus();
+        }
+        applyFilter("");
+      });
+    });
+
+    // Initial state
+    applyFilter(input.value);
+  })();
+</script>
+
+<style>
+  .guide-page {
+    padding-block: var(--space-xl) var(--space-3xl);
+  }
+
+  /* ---- Header ---- */
+  .guide-header {
+    padding-block-end: var(--space-xl);
+    border-block-end: var(--border-hair) solid var(--border);
+    margin-block-end: var(--space-xl);
+    max-inline-size: 60ch;
+  }
+
+  .guide-header__title {
+    font-size: var(--step-4);
+    line-height: 1.04;
+    letter-spacing: -0.025em;
+    margin-block-end: var(--space-s);
+  }
+
+  .guide-header__lede {
+    color: var(--muted);
+    font-size: var(--step-0);
+    line-height: 1.55;
+    margin-block-end: var(--space-m);
+  }
+
+  .guide-header__count {
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    color: var(--faint);
+  }
+
+  .guide-count-num {
+    font-weight: 650;
+    color: var(--accent);
+    margin-inline-end: 0.25ch;
+  }
+
+  /* ---- Search bar ---- */
+  .guide-search {
+    margin-block-end: var(--space-2xl);
+    max-inline-size: 40rem;
+  }
+
+  .guide-search__label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-block-end: var(--space-xs);
+  }
+
+  .guide-search__row {
+    display: flex;
+    gap: var(--space-xs);
+    align-items: center;
+  }
+
+  .guide-search__input {
+    flex: 1;
+    min-block-size: 44px;
+    padding-inline: var(--space-m);
+    border: var(--border-hair) solid var(--border-strong);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--step-0);
+    outline: none;
+    transition: border-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .guide-search__input::placeholder {
+    color: var(--faint);
+  }
+
+  .guide-search__input:focus-visible {
+    border-color: var(--accent);
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Remove the native × on type=search — we supply our own clear button. */
+  .guide-search__input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  .guide-search__clear {
+    min-block-size: 44px;
+    padding-inline: var(--space-m);
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: var(--step--1);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color var(--dur-fast) var(--ease-out-quart),
+      border-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .guide-search__clear:hover {
+    color: var(--text-strong);
+    border-color: var(--border-strong);
+  }
+
+  .guide-search__clear:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .guide-search__count {
+    margin-block-start: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    color: var(--faint);
+    min-block-size: 1.4em;
+  }
+
+  /* ---- Domain groups ---- */
+  .guide-groups {
+    display: grid;
+    gap: var(--space-3xl);
+  }
+
+  .guide-group__heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+    font-size: var(--step-1);
+    font-family: var(--font-display);
+    font-weight: 560;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+    margin-block-end: var(--space-m);
+    padding-block-end: var(--space-xs);
+    border-block-end: var(--border-hair) solid var(--border);
+  }
+
+  .guide-group__heading a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .guide-group__heading a:hover {
+    color: var(--accent);
+  }
+
+  .guide-group__heading a:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .guide-group__dot {
+    flex: none;
+    inline-size: 0.55rem;
+    block-size: 0.55rem;
+    border-radius: 50%;
+  }
+
+  .guide-group__count {
+    margin-inline-start: auto;
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    font-weight: 400;
+    color: var(--faint);
+  }
+
+  /* ---- Definition list ---- */
+  .guide-list {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) minmax(0, 2.5fr);
+    gap: 0;
+    margin: 0;
+  }
+
+  @media (max-width: 40rem) {
+    .guide-list {
+      grid-template-columns: 1fr;
+    }
+
+    /* On narrow screens, stack dt above dd with a subtle indent. */
+    .guide-list__def {
+      padding-inline-start: var(--space-m);
+      padding-block-end: var(--space-s);
+      border-block-end: var(--border-hair) solid var(--border);
+    }
+  }
+
+  .guide-list__term,
+  .guide-list__def {
+    padding: var(--space-xs) var(--space-s);
+    border-block-end: var(--border-hair) solid var(--border);
+    font-size: var(--step--1);
+    line-height: 1.5;
+    vertical-align: top;
+  }
+
+  .guide-list__term {
+    font-family: var(--font-mono);
+    padding-inline-start: 0;
+  }
+
+  .guide-list__link {
+    color: var(--text-strong);
+    font-weight: 550;
+    text-decoration: none;
+    text-underline-offset: 0.15em;
+    text-decoration-thickness: 1px;
+  }
+
+  .guide-list__link:hover {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: currentColor;
+  }
+
+  .guide-list__link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .guide-list__def {
+    color: var(--muted);
+    padding-inline-end: 0;
+  }
+
+  .guide-list__empty {
+    color: var(--faint);
+  }
+
+  /* ---- Empty state ---- */
+  .guide-empty {
+    padding-block: var(--space-2xl);
+    text-align: center;
+    color: var(--muted);
+    font-size: var(--step-0);
+  }
+
+  .guide-empty__reset {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+  }
+
+  .guide-empty__reset:hover {
+    color: var(--accent-hover);
+  }
+
+  .guide-empty__reset:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Hide filtered-out items without a gap, but keep accessible for screen
+     readers via hidden attribute (which is equivalent to display:none). */
+  [data-concept-row][hidden],
+  [data-concept-def][hidden] {
+    display: none;
+  }
+
+  [data-guide-group][hidden] {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .guide-search__input,
+    .guide-search__clear {
+      transition: none;
+    }
+  }
+</style>

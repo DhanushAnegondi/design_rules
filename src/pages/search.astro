@@ -1,0 +1,151 @@
+---
+/**
+ * search.astro — full-text search via Pagefind.
+ *
+ * The Pagefind index is built during `npm run build` (astro build && pagefind --site dist).
+ * Search is NOT available in `astro dev` — it only works in the built/preview site.
+ * The astro-pagefind integration registers the UI bundle automatically.
+ *
+ * Pagefind exposes CSS custom properties for theming. We remap the important ones
+ * to our semantic tokens so the search UI fits the site without fighting the design.
+ */
+import Base from "@/layouts/Base.astro";
+import Search from "astro-pagefind/components/Search";
+---
+
+<Base
+  title="Search"
+  description="Search all concepts, techniques, and code examples in the design library."
+>
+  <div class="container search-page">
+
+    {/* ---- Page header ---- */}
+    <header class="search-header">
+      <h1 class="search-header__title">Search the library</h1>
+      <p class="search-header__hint">
+        Type any concept name, technique, or keyword — the full text of every
+        concept page is indexed. Search only works in the built site (run
+        <code>npm run build &amp;&amp; npm run preview</code>), not in
+        <code>astro dev</code>.
+      </p>
+    </header>
+
+    {/* ---- Pagefind search widget ---- */}
+    <div class="search-widget">
+      <Search
+        id="search"
+        className="pagefind-ui"
+        uiOptions={{ showImages: false }}
+      />
+    </div>
+
+  </div>
+</Base>
+
+<style>
+  .search-page {
+    padding-block: var(--space-xl) var(--space-3xl);
+  }
+
+  /* ---- Header ---- */
+  .search-header {
+    max-inline-size: 56ch;
+    margin-block-end: var(--space-2xl);
+  }
+
+  .search-header__title {
+    font-size: var(--step-4);
+    line-height: 1.06;
+    letter-spacing: -0.025em;
+    margin-block-end: var(--space-s);
+  }
+
+  .search-header__hint {
+    color: var(--muted);
+    font-size: var(--step--1);
+    line-height: 1.6;
+  }
+
+  .search-header__hint code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-s);
+    background: var(--surface-2);
+    border: var(--border-hair) solid var(--border);
+    color: var(--text-strong);
+    white-space: nowrap;
+  }
+
+  /* ---- Widget wrapper ---- */
+  .search-widget {
+    max-inline-size: 44rem;
+  }
+
+  /*
+   * Pagefind UI theming via its exposed CSS custom properties.
+   * We remap to our OKLCH tokens so the widget matches the site palette.
+   * Only the subset that visibly conflicts; Pagefind's defaults handle the rest.
+   *
+   * Source: https://pagefind.app/docs/ui/#styling-the-pagefind-ui
+   */
+  .search-widget {
+    --pagefind-ui-scale: 1;
+    --pagefind-ui-primary: var(--accent);
+    --pagefind-ui-text: var(--text);
+    --pagefind-ui-background: var(--surface);
+    --pagefind-ui-border: var(--border-strong);
+    --pagefind-ui-tag: var(--surface-2);
+    --pagefind-ui-border-width: 1px;
+    --pagefind-ui-border-radius: 8px;
+    --pagefind-ui-image-border-radius: 8px;
+    --pagefind-ui-font: var(--font-body);
+  }
+
+  /* Ensure the Pagefind input matches our focus ring convention. */
+  .search-widget :global(.pagefind-ui__search-input:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Results text uses our muted token. */
+  .search-widget :global(.pagefind-ui__message) {
+    color: var(--muted);
+    font-size: var(--step--1);
+  }
+
+  /* Result titles use our strong text + display face. */
+  .search-widget :global(.pagefind-ui__result-title) {
+    font-family: var(--font-display);
+    color: var(--text-strong);
+  }
+
+  /* Excerpts. */
+  .search-widget :global(.pagefind-ui__result-excerpt) {
+    color: var(--muted);
+    font-size: var(--step--1);
+    line-height: 1.6;
+  }
+
+  /* The "load more" button. */
+  .search-widget :global(.pagefind-ui__button) {
+    min-block-size: 44px;
+    border: var(--border-hair) solid var(--border-strong);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--step--1);
+    cursor: pointer;
+  }
+
+  .search-widget :global(.pagefind-ui__button:hover) {
+    background: var(--surface-2);
+    border-color: var(--accent);
+    color: var(--text-strong);
+  }
+
+  .search-widget :global(.pagefind-ui__button:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+</style>

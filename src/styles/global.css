@@ -1,0 +1,391 @@
+/*
+  global.css — base reset, element styles, layout primitives, prose, shiki theming.
+  Consumes semantic tokens from tokens.css. Dark-mode-first. Motion is transform/opacity
+  only and fully neutralized under prefers-reduced-motion.
+*/
+
+@import "./tokens.css";
+/* Self-hosted display face (variable). No runtime network call. */
+@import "@fontsource-variable/fraunces";
+
+/* ---------------------------------------------------------------------------
+   Reset
+--------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-block-size: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+img,
+picture,
+svg,
+video,
+canvas {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+ul[role="list"],
+ol[role="list"] {
+  list-style: none;
+  padding: 0;
+}
+
+:where(h1, h2, h3, h4, h5, h6) {
+  text-wrap: balance;
+}
+
+:where(p, li, figcaption) {
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------------------
+   Base element styles
+--------------------------------------------------------------------------- */
+body {
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  color: var(--text);
+  background-color: var(--bg);
+  font-synthesis: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 560;
+  line-height: 1.08;
+  letter-spacing: -0.018em;
+  color: var(--text-strong);
+  /* Slight optical-size lean via Fraunces variable axis where supported. */
+  font-variation-settings: "opsz" 60;
+}
+
+h1 {
+  font-size: var(--step-5);
+  font-weight: 600;
+  letter-spacing: -0.026em;
+}
+
+h2 {
+  font-size: var(--step-3);
+}
+
+h3 {
+  font-size: var(--step-2);
+}
+
+h4,
+h5,
+h6 {
+  font-family: var(--font-body);
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+
+h4 {
+  font-size: var(--step-1);
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  text-decoration-color: color-mix(in oklch, var(--accent) 45%, transparent);
+}
+
+a:hover {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+
+code,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--accent) 30%, transparent);
+  color: var(--text-strong);
+}
+
+/* ---------------------------------------------------------------------------
+   Focus — strong, visible, never removed
+--------------------------------------------------------------------------- */
+:where(a, button, [tabindex], input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* Drop the default outline only when we provide our own focus-visible. */
+:where(a, button, [tabindex], input, textarea, select, summary):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Skip link — off-screen until focused
+--------------------------------------------------------------------------- */
+.skip-link {
+  position: absolute;
+  inset-block-start: var(--space-s);
+  inset-inline-start: var(--space-s);
+  z-index: 100;
+  padding: var(--space-xs) var(--space-m);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-2);
+  transform: translateY(calc(-100% - var(--space-l)));
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  color: var(--accent-contrast);
+}
+
+/* ---------------------------------------------------------------------------
+   Layout primitives
+--------------------------------------------------------------------------- */
+.container {
+  --gutter: clamp(1.25rem, 0.9rem + 2vw, 2.5rem);
+  inline-size: 100%;
+  max-inline-size: 72rem;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.container-wide {
+  max-inline-size: 84rem;
+}
+
+/* Vertical rhythm: even spacing between flow children. */
+.stack > * + * {
+  margin-block-start: var(--stack-gap, var(--space-m));
+}
+
+/* Horizontal group that wraps; aligns to baseline-ish center. */
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cluster-gap, var(--space-s));
+  align-items: center;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Prose — rendered markdown, capped reading measure
+--------------------------------------------------------------------------- */
+.prose {
+  max-inline-size: var(--measure);
+  color: var(--text);
+  font-size: var(--step-0);
+  line-height: 1.68;
+}
+
+.prose > * + * {
+  margin-block-start: var(--space-m);
+}
+
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin-block-start: var(--space-xl);
+  scroll-margin-block-start: var(--space-2xl);
+}
+
+.prose h2 + *,
+.prose h3 + *,
+.prose h4 + * {
+  margin-block-start: var(--space-s);
+}
+
+.prose p,
+.prose li {
+  color: var(--text);
+}
+
+.prose ul,
+.prose ol {
+  padding-inline-start: var(--space-l);
+}
+
+.prose li + li {
+  margin-block-start: var(--space-2xs);
+}
+
+.prose a {
+  font-weight: 500;
+}
+
+.prose strong {
+  color: var(--text-strong);
+  font-weight: 650;
+}
+
+.prose blockquote {
+  margin-inline: 0;
+  padding-inline-start: var(--space-m);
+  border-inline-start: 2px solid var(--accent);
+  color: var(--muted);
+  font-style: italic;
+}
+
+.prose hr {
+  block-size: var(--border-hair);
+  border: 0;
+  background: var(--border);
+  margin-block: var(--space-xl);
+}
+
+/* Inline code (not inside a highlighted block). */
+.prose :not(pre) > code {
+  padding: 0.12em 0.4em;
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+  border: var(--border-hair) solid var(--border);
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+.prose table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--step--1);
+}
+
+.prose th,
+.prose td {
+  padding: var(--space-xs) var(--space-s);
+  border-block-end: var(--border-hair) solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.prose th {
+  color: var(--text-strong);
+  font-weight: 650;
+  border-block-end-color: var(--border-strong);
+}
+
+.prose img {
+  border-radius: var(--radius-m);
+  border: var(--border-hair) solid var(--border);
+}
+
+/* Heading anchors (added by rehype-autolink-headings, behavior: wrap).
+   Keep them invisible until the heading is hovered/focused. */
+.prose .heading-anchor {
+  color: inherit;
+  text-decoration: none;
+  position: relative;
+}
+
+.prose .heading-anchor::before {
+  content: "#";
+  position: absolute;
+  inset-inline-start: -1.1ch;
+  color: var(--accent);
+  opacity: 0;
+  font-weight: 400;
+}
+
+.prose .heading-anchor:hover::before,
+.prose .heading-anchor:focus-visible::before {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Shiki dual-theme code blocks
+--------------------------------------------------------------------------- */
+.shiki,
+.shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+
+:root[data-theme="dark"] .shiki,
+:root[data-theme="dark"] .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+
+pre.shiki {
+  padding: var(--space-m) var(--space-l);
+  border-radius: var(--radius-m);
+  border: var(--border-hair) solid var(--border);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+pre.shiki code {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion discipline — global reduced-motion neutralizer
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,135 @@
+---
+/**
+ * Toc.astro — "On this page" navigation. Anchor links to each section.
+ * Sticky on wide screens (the parent aside provides the sticky context too).
+ *
+ * Progressive enhancement: a tiny inline script marks the section currently in
+ * view via IntersectionObserver and sets aria-current on its link. Without JS the
+ * links still work (plain anchors). Under prefers-reduced-motion we skip the
+ * observer entirely so there is no shifting active-indicator — the list is just a
+ * static set of links, which is the calm fallback.
+ */
+import type { Section } from "@/lib/parse-library";
+
+interface Props {
+  sections: Section[];
+}
+
+const { sections } = Astro.props;
+---
+
+{
+  sections.length > 0 && (
+    <nav class="toc" aria-label="On this page">
+      <p class="toc__title">On this page</p>
+      <ol class="toc__list" role="list">
+        {sections.map((section) => (
+          <li>
+            <a class="toc__link" href={`#${section.slug}`} data-toc-link={section.slug}>
+              {section.title}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  )
+}
+
+<script is:inline>
+  (function () {
+    var reduce =
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return; // calm fallback: no moving active indicator
+
+    var links = Array.prototype.slice.call(
+      document.querySelectorAll("[data-toc-link]")
+    );
+    if (!links.length || !("IntersectionObserver" in window)) return;
+
+    var byId = {};
+    links.forEach(function (a) {
+      byId[a.getAttribute("data-toc-link")] = a;
+    });
+
+    var visible = {};
+    var observer = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          visible[entry.target.id] = entry.isIntersecting;
+        });
+        // Highlight the first section currently intersecting, in document order.
+        var current = null;
+        for (var i = 0; i < links.length; i++) {
+          var id = links[i].getAttribute("data-toc-link");
+          if (visible[id]) {
+            current = id;
+            break;
+          }
+        }
+        links.forEach(function (a) {
+          var on = a.getAttribute("data-toc-link") === current;
+          if (on) a.setAttribute("aria-current", "true");
+          else a.removeAttribute("aria-current");
+        });
+      },
+      { rootMargin: "0px 0px -70% 0px", threshold: 0 }
+    );
+
+    links.forEach(function (a) {
+      var el = document.getElementById(a.getAttribute("data-toc-link"));
+      if (el) observer.observe(el);
+    });
+  })();
+</script>
+
+<style>
+  .toc {
+    font-size: var(--step--1);
+  }
+
+  .toc__title {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-block-end: var(--space-xs);
+  }
+
+  .toc__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1px;
+    /* The accent rail sits to the left; links indent past it. */
+    border-inline-start: var(--border-hair) solid var(--border);
+  }
+
+  .toc__link {
+    display: block;
+    padding: 0.4em var(--space-s);
+    margin-inline-start: -1px;
+    border-inline-start: 2px solid transparent;
+    color: var(--muted);
+    text-decoration: none;
+    line-height: 1.35;
+  }
+
+  .toc__link:hover {
+    color: var(--text-strong);
+  }
+
+  .toc__link[aria-current="true"] {
+    color: var(--text-strong);
+    border-inline-start-color: var(--accent);
+    font-weight: 550;
+  }
+
+  .toc__link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+</style>

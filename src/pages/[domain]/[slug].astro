@@ -1,0 +1,519 @@
+---
+/**
+ * [domain]/[slug].astro — the concept detail page.
+ *
+ * The most-visited, taste-critical page. For one concept it shows: a header
+ * (breadcrumb, title, lead definition, metadata chips), a sticky table of
+ * contents + colors aside on wide screens, the full rendered body with live
+ * sandboxed previews beside copy-paste code, related cross-references, and
+ * prev/next navigation within the same domain.
+ */
+import Base from "@/layouts/Base.astro";
+import MetaChips from "@/components/MetaChips.astro";
+import Toc from "@/components/Toc.astro";
+import ColorSwatches from "@/components/ColorSwatches.astro";
+import ReferenceList from "@/components/ReferenceList.astro";
+import CodeBlock from "@/components/CodeBlock.tsx";
+import LivePreview from "@/components/LivePreview.tsx";
+import { getAllConcepts, type Concept } from "@/lib/parse-library";
+import { domainById } from "@/lib/domains";
+
+export async function getStaticPaths() {
+  const concepts = await getAllConcepts();
+  return concepts.map((c) => ({
+    params: { domain: c.domainId, slug: c.slug },
+    props: { concept: c },
+  }));
+}
+
+interface Props {
+  concept: Concept;
+}
+
+const { concept } = Astro.props;
+const domain = domainById(concept.domainId);
+
+// Prev/next within the SAME domain, in the library's sorted order.
+const all = await getAllConcepts();
+const siblings = all.filter((c) => c.domainId === concept.domainId);
+const idx = siblings.findIndex((c) => c.slug === concept.slug);
+const prev = idx > 0 ? siblings[idx - 1] : undefined;
+const next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : undefined;
+
+const hasColors = concept.colors.length > 0;
+const hasToc = concept.sections.length > 0;
+const hasAside = hasColors || hasToc;
+---
+
+<Base title={concept.title} description={concept.definition}>
+  <div class="container concept">
+    {/* ---- Header ---- */}
+    <header class="concept__header">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ol role="list">
+          <li><a href="/">Home</a></li>
+          {
+            domain && (
+              <li>
+                <a href={`/${domain.id}`}>{domain.title}</a>
+              </li>
+            )
+          }
+          <li aria-current="page">{concept.title}</li>
+        </ol>
+      </nav>
+
+      <h1 class="concept__title">{concept.title}</h1>
+
+      {
+        concept.definition && (
+          <p class="concept__lead">{concept.definition}</p>
+        )
+      }
+
+      <MetaChips meta={concept.meta} isRecipe={concept.isRecipe} />
+    </header>
+
+    {/* ---- Body: aside + article ---- */}
+    <div class="concept__grid" data-has-aside={hasAside ? "true" : "false"}>
+      {
+        hasAside && (
+          <aside class="concept__aside">
+            <div class="concept__aside-inner">
+              {hasToc && <Toc sections={concept.sections} />}
+              {hasColors && <ColorSwatches colors={concept.colors} />}
+            </div>
+          </aside>
+        )
+      }
+
+      <article class="concept__article">
+        {
+          concept.sections.map((section) => (
+            <section class="concept__section">
+              <h2 id={section.slug} class="concept__h2">
+                {section.title}
+              </h2>
+              {section.tokens.map((token) =>
+                token.type === "prose" ? (
+                  <div class="prose" set:html={token.html} />
+                ) : token.runnable ? (
+                  <div class="concept__demo">
+                    <LivePreview
+                      code={token.code}
+                      highlighted={token.highlighted}
+                      lang={token.lang}
+                      client:visible
+                    />
+                  </div>
+                ) : (
+                  <div class="concept__code">
+                    <CodeBlock
+                      code={token.code}
+                      highlighted={token.highlighted}
+                      lang={token.lang}
+                      client:visible
+                    />
+                  </div>
+                )
+              )}
+            </section>
+          ))
+        }
+
+        {
+          concept.crossRefs.length > 0 && (
+            <div class="concept__related">
+              <ReferenceList refs={concept.crossRefs} />
+            </div>
+          )
+        }
+
+        {/* ---- Prev / next within this domain ---- */}
+        {
+          (prev || next) && (
+            <nav class="concept__pager" aria-label="More in this domain">
+              {prev ? (
+                <a
+                  class="pager pager--prev"
+                  rel="prev"
+                  href={`/${prev.domainId}/${prev.slug}`}
+                >
+                  <span class="pager__dir">Previous</span>
+                  <span class="pager__title">{prev.title}</span>
+                </a>
+              ) : (
+                <span />
+              )}
+              {next ? (
+                <a
+                  class="pager pager--next"
+                  rel="next"
+                  href={`/${next.domainId}/${next.slug}`}
+                >
+                  <span class="pager__dir">Next</span>
+                  <span class="pager__title">{next.title}</span>
+                </a>
+              ) : (
+                <span />
+              )}
+            </nav>
+          )
+        }
+      </article>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .concept {
+    padding-block: var(--space-xl) var(--space-3xl);
+  }
+
+  /* ---- Header ---- */
+  .concept__header {
+    max-inline-size: var(--measure);
+  }
+
+  .breadcrumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs) var(--space-xs);
+    list-style: none;
+    margin: 0 0 var(--space-m);
+    padding: 0;
+    font-size: var(--step--1);
+    color: var(--muted);
+  }
+
+  .breadcrumb li {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .breadcrumb li + li::before {
+    content: "/";
+    margin-inline-end: var(--space-xs);
+    color: var(--faint);
+  }
+
+  .breadcrumb a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+
+  .breadcrumb a:hover {
+    color: var(--accent);
+  }
+
+  .breadcrumb [aria-current="page"] {
+    color: var(--text);
+  }
+
+  .concept__title {
+    margin-block: var(--space-xs) var(--space-m);
+  }
+
+  .concept__lead {
+    font-size: var(--step-1);
+    line-height: 1.5;
+    color: var(--muted);
+    margin-block-end: var(--space-l);
+  }
+
+  /* ---- Grid: aside + article ---- */
+  .concept__grid {
+    margin-block-start: var(--space-2xl);
+    display: grid;
+    gap: var(--space-xl);
+  }
+
+  @media (min-width: 60rem) {
+    .concept__grid[data-has-aside="true"] {
+      grid-template-columns: minmax(0, 1fr) 16rem;
+    }
+
+    /* Aside goes to the right column visually; article first in source for a11y. */
+    .concept__grid[data-has-aside="true"] .concept__aside {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .concept__grid[data-has-aside="true"] .concept__article {
+      grid-column: 1;
+      grid-row: 1;
+    }
+  }
+
+  .concept__aside-inner {
+    display: grid;
+    gap: var(--space-xl);
+  }
+
+  @media (min-width: 60rem) {
+    .concept__aside-inner {
+      position: sticky;
+      inset-block-start: calc(60px + var(--space-m));
+      max-block-size: calc(100vh - 60px - var(--space-xl));
+      overflow-y: auto;
+      padding-block-end: var(--space-m);
+    }
+  }
+
+  /* ---- Article ---- */
+  .concept__article {
+    min-inline-size: 0;
+  }
+
+  .concept__section + .concept__section {
+    margin-block-start: var(--space-2xl);
+  }
+
+  .concept__h2 {
+    font-size: var(--step-3);
+    scroll-margin-block-start: calc(60px + var(--space-m));
+    margin-block-end: var(--space-m);
+    padding-block-end: var(--space-xs);
+    border-block-end: var(--border-hair) solid var(--border);
+  }
+
+  /* Prose sits within a comfortable reading measure. */
+  .concept__section :global(.prose) {
+    margin-block-start: var(--space-m);
+  }
+
+  /* Code samples align with the prose measure but allow horizontal scroll. */
+  .concept__code {
+    margin-block-start: var(--space-m);
+    max-inline-size: var(--measure);
+  }
+
+  /* Live demos break out wider than the prose measure so the effect has room. */
+  .concept__demo {
+    margin-block-start: var(--space-l);
+  }
+
+  @media (min-width: 75rem) {
+    .concept__demo {
+      /* Gentle break-out past the reading measure on very wide screens. */
+      margin-inline-end: calc(-1 * var(--space-2xl));
+    }
+  }
+
+  .concept__related {
+    margin-block-start: var(--space-3xl);
+  }
+
+  /* ---- Pager ---- */
+  .concept__pager {
+    margin-block-start: var(--space-2xl);
+    padding-block-start: var(--space-xl);
+    border-block-start: var(--border-hair) solid var(--border);
+    display: grid;
+    gap: var(--space-m);
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pager {
+    display: grid;
+    gap: var(--space-2xs);
+    padding: var(--space-m);
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    text-decoration: none;
+    color: var(--text-strong);
+    transition: border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .pager--next {
+    text-align: end;
+  }
+
+  .pager:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text-strong);
+  }
+
+  .pager:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .pager__dir {
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .pager__title {
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+    line-height: 1.2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pager {
+      transition: none;
+    }
+  }
+
+  /* ---- Live preview + code block component styles (global; islands render markup) ---- */
+  :global(.livepreview) {
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-l);
+    overflow: hidden;
+    background: var(--bg-elev);
+  }
+
+  :global(.livepreview__bar) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-m);
+    border-block-end: var(--border-hair) solid var(--border);
+    background: var(--surface);
+  }
+
+  :global(.livepreview__label) {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  :global(.livepreview__controls) {
+    display: flex;
+    gap: var(--space-2xs);
+  }
+
+  :global(.livepreview__btn) {
+    min-block-size: 36px;
+    padding-inline: var(--space-s);
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--bg-elev);
+    color: var(--text);
+    font-size: var(--step--1);
+    transition: border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  :global(.livepreview__btn:hover) {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+
+  :global(.livepreview__btn:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  :global(.livepreview__note) {
+    margin: 0;
+    padding: var(--space-xs) var(--space-m);
+    border-block-end: var(--border-hair) solid var(--border);
+    background: color-mix(in oklch, var(--accent) 8%, var(--surface));
+    color: var(--muted);
+    font-size: var(--step--1);
+  }
+
+  :global(.livepreview__frame-wrap) {
+    background: var(--preview-bg);
+  }
+
+  :global(.livepreview__frame) {
+    display: block;
+    inline-size: 100%;
+    block-size: 380px;
+    border: 0;
+  }
+
+  :global(.livepreview__frame-wrap[data-expanded="true"] .livepreview__frame) {
+    block-size: 680px;
+  }
+
+  /* ---- CodeBlock ---- */
+  :global(.codeblock) {
+    margin: 0;
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-m);
+    overflow: hidden;
+    background: var(--bg-elev);
+  }
+
+  /* When the code block is embedded inside a live preview, square the top edge
+     so it reads as one card with the iframe above it. */
+  :global(.livepreview .codeblock--inpreview) {
+    border-inline: 0;
+    border-block-end: 0;
+    border-radius: 0;
+    border-block-start: var(--border-hair) solid var(--border);
+  }
+
+  :global(.codeblock__bar) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs);
+    padding: var(--space-2xs) var(--space-m);
+    border-block-end: var(--border-hair) solid var(--border);
+    background: var(--surface);
+  }
+
+  :global(.codeblock__lang) {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+  }
+
+  :global(.codeblock__copy) {
+    min-block-size: 32px;
+    padding-inline: var(--space-s);
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--bg-elev);
+    color: var(--text);
+    font-size: var(--step--1);
+    transition: border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  :global(.codeblock__copy:hover) {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+
+  :global(.codeblock__copy:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  :global(.codeblock__code) {
+    overflow: hidden;
+  }
+
+  /* The shiki <pre> already carries its own padding/border via global.css;
+     reset the border here since the figure provides the frame. */
+  :global(.codeblock__code pre.shiki) {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(.livepreview__btn),
+    :global(.codeblock__copy) {
+      transition: none;
+    }
+  }
+</style>

@@ -1,0 +1,233 @@
+---
+/**
+ * 404.astro — the not-found page.
+ *
+ * Astro serves this automatically for any unmatched route. The page:
+ * - States clearly that the page doesn't exist (plain language, no jargon).
+ * - Offers a small set of useful navigation links: Home, the guide, search,
+ *   and a link to the domain browse list so the visitor can still find something.
+ * - Uses Base, tokens only, sentence-case headings, no emoji in chrome.
+ */
+import Base from "@/layouts/Base.astro";
+import { DOMAINS } from "@/lib/domains";
+
+const orderedDomains = [...DOMAINS].sort((a, b) => a.order - b.order);
+const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
+---
+
+<Base title="Page not found" description="The page you requested does not exist in the design library.">
+  <div class="container not-found">
+
+    <header class="not-found__header">
+      <p class="not-found__code" aria-hidden="true">404</p>
+      <h1 class="not-found__title">Page not found</h1>
+      <p class="not-found__body">
+        That address doesn't match any page in the library. It may have moved,
+        been renamed, or the link may contain a typo.
+      </p>
+    </header>
+
+    <nav class="not-found__nav" aria-label="Recovery options">
+      <ul class="not-found__links" role="list">
+        <li>
+          <a class="recovery-link recovery-link--primary" href="/">
+            Back to home
+          </a>
+        </li>
+        <li>
+          <a class="recovery-link" href="/guide">
+            Use-when map
+          </a>
+        </li>
+        <li>
+          <a class="recovery-link" href="/search">
+            Search the library
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <section class="not-found__domains" aria-labelledby="domains-heading">
+      <h2 id="domains-heading" class="not-found__domains-heading">
+        Or browse a domain
+      </h2>
+      <ul class="domains-list" role="list">
+        {orderedDomains.map((d) => (
+          <li>
+            <a class="domain-link" href={`/${d.id}`}>
+              <span
+                class="domain-link__dot"
+                style={`background:${dot(d.accentHue)}`}
+                aria-hidden="true"
+              ></span>
+              {d.title}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+  </div>
+</Base>
+
+<style>
+  .not-found {
+    padding-block: var(--space-3xl) var(--space-3xl);
+    max-inline-size: 48rem;
+  }
+
+  /* ---- Header ---- */
+  .not-found__header {
+    margin-block-end: var(--space-2xl);
+  }
+
+  .not-found__code {
+    font-family: var(--font-mono);
+    font-size: var(--step-5);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--border-strong);
+    letter-spacing: -0.04em;
+    margin-block-end: var(--space-m);
+    /* Screen readers skip this — the heading already conveys the state. */
+  }
+
+  .not-found__title {
+    font-size: var(--step-3);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    margin-block-end: var(--space-s);
+  }
+
+  .not-found__body {
+    max-inline-size: 50ch;
+    color: var(--muted);
+    font-size: var(--step-0);
+    line-height: 1.6;
+  }
+
+  /* ---- Recovery nav ---- */
+  .not-found__nav {
+    margin-block-end: var(--space-3xl);
+  }
+
+  .not-found__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .recovery-link {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 44px;
+    padding-inline: var(--space-l);
+    border: var(--border-hair) solid var(--border-strong);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    font-size: var(--step-0);
+    font-weight: 500;
+    transition:
+      border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart),
+      color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .recovery-link:hover {
+    border-color: var(--accent);
+    background: var(--surface-2);
+    color: var(--text-strong);
+  }
+
+  .recovery-link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .recovery-link--primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+  }
+
+  .recovery-link--primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: var(--accent-contrast);
+  }
+
+  /* ---- Domain list ---- */
+  .not-found__domains-heading {
+    font-size: var(--step-1);
+    font-family: var(--font-body);
+    font-weight: 650;
+    letter-spacing: 0;
+    color: var(--text-strong);
+    margin-block-end: var(--space-m);
+  }
+
+  .domains-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  @media (min-width: 36rem) {
+    .domains-list {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (min-width: 56rem) {
+    .domains-list {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .domain-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-block-size: 44px;
+    padding-inline: var(--space-s);
+    border-radius: var(--radius-s);
+    color: var(--text);
+    text-decoration: none;
+    font-size: var(--step--1);
+    transition:
+      background-color var(--dur-fast) var(--ease-out-quart),
+      color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .domain-link:hover {
+    background: var(--surface);
+    color: var(--text-strong);
+  }
+
+  .domain-link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .domain-link__dot {
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .recovery-link,
+    .domain-link {
+      transition: none;
+    }
+  }
+</style>

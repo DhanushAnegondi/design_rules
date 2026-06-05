@@ -1,0 +1,187 @@
+---
+/**
+ * DomainCard.astro — a bento tile linking to a domain index (`/{domain.id}`).
+ *
+ * Shows the domain title (display face), its beginner-facing blurb, the concept
+ * count, and a small per-domain accent dot. The dot is the ONLY place the
+ * per-domain hue appears — the tile itself uses neutral surface tokens, never a
+ * full coloured background (see docs/GUIDELINES.md, color rules).
+ *
+ * `featured` makes the tile larger in the bento (spans 2 columns / 2 rows on
+ * wide screens) and bumps the type, so the grid has genuine size variance
+ * instead of nine identical cards.
+ */
+import type { Domain } from "@/lib/domains";
+
+interface Props {
+  domain: Domain;
+  count: number;
+  featured?: boolean;
+}
+
+const { domain, count, featured = false } = Astro.props;
+
+// Per-domain accent dot only — matches the hue used in the nav.
+const dot = `oklch(70% 0.13 ${domain.accentHue})`;
+const countLabel = `${count} ${count === 1 ? "concept" : "concepts"}`;
+---
+
+<a
+  class="domain-card"
+  class:list={[{ "domain-card--featured": featured }]}
+  href={`/${domain.id}`}
+>
+  <span class="domain-card__top">
+    <span class="domain-card__dot" style={`background:${dot}`} aria-hidden="true"></span>
+    <span class="domain-card__count">{countLabel}</span>
+  </span>
+
+  <span class="domain-card__body">
+    <span class="domain-card__title">{domain.title}</span>
+    <span class="domain-card__blurb">{domain.blurb}</span>
+  </span>
+
+  <span class="domain-card__cue" aria-hidden="true">
+    Browse
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  </span>
+</a>
+
+<style>
+  .domain-card {
+    /* The whole tile is one link. */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-m);
+    min-block-size: 44px;
+    block-size: 100%;
+    padding: var(--space-l);
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-l);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    overflow: clip;
+    transition:
+      transform var(--dur-mid) var(--ease-out-expo),
+      border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .domain-card:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    transform: translateY(-3px);
+  }
+
+  .domain-card:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  /* ---- Top row: accent dot + concept count ---- */
+  .domain-card__top {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .domain-card__dot {
+    flex: none;
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    border-radius: 50%;
+  }
+
+  .domain-card__count {
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.01em;
+    color: var(--muted);
+  }
+
+  /* ---- Body: title + blurb, pushed apart from the cue below ---- */
+  .domain-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    margin-block-end: auto;
+  }
+
+  .domain-card__title {
+    font-family: var(--font-display);
+    font-weight: 560;
+    font-size: var(--step-2);
+    line-height: 1.1;
+    letter-spacing: -0.018em;
+    color: var(--text-strong);
+    font-variation-settings: "opsz" 48;
+  }
+
+  .domain-card__blurb {
+    color: var(--muted);
+    font-size: var(--step--1);
+    line-height: 1.55;
+    max-inline-size: 46ch;
+  }
+
+  /* ---- Footer cue ---- */
+  .domain-card__cue {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    color: var(--faint);
+    transition:
+      color var(--dur-fast) var(--ease-out-quart),
+      transform var(--dur-mid) var(--ease-out-expo);
+  }
+
+  .domain-card__cue svg {
+    display: inline-block;
+  }
+
+  .domain-card:hover .domain-card__cue {
+    color: var(--accent);
+    transform: translateX(3px);
+  }
+
+  /* ---- Featured tile: bigger type + spans, only on wide enough grids ---- */
+  .domain-card--featured .domain-card__title {
+    font-size: var(--step-3);
+  }
+
+  .domain-card--featured .domain-card__blurb {
+    font-size: var(--step-0);
+  }
+
+  /* The grid spans only apply where the parent grid actually has the columns;
+     the home page bento sets these via grid-template at its own breakpoints, but
+     featured tiles also self-declare a span so they work in any multi-col grid. */
+  @media (min-width: 48rem) {
+    .domain-card--featured {
+      grid-column: span 2;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .domain-card--featured {
+      grid-row: span 2;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .domain-card,
+    .domain-card__cue {
+      transition: none;
+    }
+    .domain-card:hover,
+    .domain-card:hover .domain-card__cue {
+      transform: none;
+    }
+  }
+</style>

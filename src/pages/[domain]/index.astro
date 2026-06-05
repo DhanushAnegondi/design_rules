@@ -1,0 +1,510 @@
+---
+/**
+ * [domain]/index.astro — domain landing page.
+ *
+ * Handles the bare /{domain} route. The sibling [slug].astro handles
+ * /{domain}/{slug} — Astro treats these as distinct routes with no collision
+ * (index.astro = the folder itself; [slug].astro = named children).
+ *
+ * Shows a breadcrumb, domain header, concept count, and a filterable grid
+ * of ConceptCard components. The filter bar is progressively enhanced:
+ * without JS all cards are visible; with JS, toggle buttons narrow the view
+ * by Effort and Maturity data-attributes.
+ */
+import Base from "@/layouts/Base.astro";
+import ConceptCard from "@/components/ConceptCard.astro";
+import { DOMAINS, type Domain } from "@/lib/domains";
+import { getAllConcepts, type Concept } from "@/lib/parse-library";
+
+export async function getStaticPaths() {
+  return DOMAINS.map((d) => ({
+    params: { domain: d.id },
+    props: { domain: d },
+  }));
+}
+
+interface Props {
+  domain: Domain;
+}
+
+const { domain } = Astro.props;
+
+const all = await getAllConcepts();
+const concepts: Concept[] = all
+  .filter((c) => c.domainId === domain.id)
+  .sort((a, b) => a.title.localeCompare(b.title));
+
+// Collect unique Effort and Maturity values for the filter bar.
+// Lower-case to match data-attributes; filter out empty strings.
+const effortValues = [...new Set(
+  concepts
+    .map((c) => c.meta.effort?.toLowerCase().trim() ?? "")
+    .filter(Boolean)
+)].sort();
+
+const maturityValues = [...new Set(
+  concepts
+    .map((c) => c.meta.maturity?.toLowerCase().trim() ?? "")
+    .filter(Boolean)
+)].sort();
+
+const hasFilters = effortValues.length > 0 || maturityValues.length > 0;
+
+const dot = `oklch(70% 0.13 ${domain.accentHue})`;
+---
+
+<Base title={domain.title} description={domain.blurb}>
+  <div class="container domain-page">
+
+    {/* ---- Breadcrumb ---- */}
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol role="list">
+        <li><a href="/">Home</a></li>
+        <li aria-current="page">{domain.title}</li>
+      </ol>
+    </nav>
+
+    {/* ---- Header ---- */}
+    <header class="domain-header">
+      <span class="domain-dot" style={`background:${dot}`} aria-hidden="true"></span>
+      <h1 class="domain-header__title">{domain.title}</h1>
+      <p class="domain-header__blurb">{domain.blurb}</p>
+      <p class="domain-header__count">
+        <span class="domain-header__count-num">{concepts.length}</span>
+        {concepts.length === 1 ? "concept" : "concepts"}
+      </p>
+    </header>
+
+    {/* ---- Filter bar ---- */}
+    {hasFilters && (
+      <div class="filter-bar" data-filter-bar>
+        <div class="filter-bar__groups">
+          {effortValues.length > 0 && (
+            <div class="filter-group">
+              <span class="filter-group__label" id="effort-label">Effort</span>
+              <div class="filter-group__buttons" role="group" aria-labelledby="effort-label">
+                {effortValues.map((v) => (
+                  <button
+                    class="filter-btn"
+                    type="button"
+                    data-filter-type="effort"
+                    data-filter-value={v}
+                    aria-pressed="false"
+                  >
+                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {maturityValues.length > 0 && (
+            <div class="filter-group">
+              <span class="filter-group__label" id="maturity-label">Maturity</span>
+              <div class="filter-group__buttons" role="group" aria-labelledby="maturity-label">
+                {maturityValues.map((v) => (
+                  <button
+                    class="filter-btn"
+                    type="button"
+                    data-filter-type="maturity"
+                    data-filter-value={v}
+                    aria-pressed="false"
+                  >
+                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div class="filter-bar__actions">
+          <button
+            class="filter-clear"
+            type="button"
+            data-filter-clear
+            aria-label="Clear all filters"
+            hidden
+          >
+            Clear filters
+          </button>
+        </div>
+
+        {/* Live region for announcing visible count to screen readers */}
+        <p
+          class="filter-count"
+          aria-live="polite"
+          aria-atomic="true"
+          data-filter-count
+        ></p>
+      </div>
+    )}
+
+    {/* ---- Concept grid ---- */}
+    {concepts.length > 0 ? (
+      <ul class="concept-grid" role="list" data-concept-list>
+        {concepts.map((c) => (
+          <li
+            data-effort={c.meta.effort?.toLowerCase().trim() ?? ""}
+            data-maturity={c.meta.maturity?.toLowerCase().trim() ?? ""}
+          >
+            <ConceptCard concept={c} />
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="domain-empty">No concepts found in this domain yet.</p>
+    )}
+  </div>
+</Base>
+
+{/* ---- Filter script (progressive enhancement) ---- */}
+<script>
+  (function () {
+    var bar = document.querySelector("[data-filter-bar]");
+    if (!bar) return;
+
+    var list = document.querySelector("[data-concept-list]");
+    if (!list) return;
+
+    var clearBtn = bar.querySelector("[data-filter-clear]") as HTMLButtonElement | null;
+    var countEl = bar.querySelector("[data-filter-count]") as HTMLElement | null;
+
+    // Active filter state: { effort: Set<string>, maturity: Set<string> }
+    var active: Record<string, Set<string>> = { effort: new Set(), maturity: new Set() };
+
+    function updateCount() {
+      if (!countEl) return;
+      var items = list!.querySelectorAll("li");
+      var visible = 0;
+      items.forEach(function (li) {
+        if ((li as HTMLElement).hidden === false) visible++;
+      });
+      var hasActive = active.effort.size > 0 || active.maturity.size > 0;
+      countEl.textContent = hasActive
+        ? "Showing " + visible + " of " + items.length + " concepts"
+        : "";
+    }
+
+    function applyFilters() {
+      var items = list!.querySelectorAll("li");
+      var hasActive = active.effort.size > 0 || active.maturity.size > 0;
+
+      items.forEach(function (li) {
+        var el = li as HTMLElement;
+        if (!hasActive) {
+          el.hidden = false;
+          return;
+        }
+        var effortOk =
+          active.effort.size === 0 ||
+          active.effort.has(el.dataset.effort ?? "");
+        var maturityOk =
+          active.maturity.size === 0 ||
+          active.maturity.has(el.dataset.maturity ?? "");
+        el.hidden = !(effortOk && maturityOk);
+      });
+
+      if (clearBtn) {
+        clearBtn.hidden = !hasActive;
+      }
+
+      updateCount();
+    }
+
+    // Wire toggle buttons
+    var btns = bar.querySelectorAll(".filter-btn");
+    btns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var el = btn as HTMLButtonElement;
+        var type = el.dataset.filterType as "effort" | "maturity";
+        var value = el.dataset.filterValue ?? "";
+        var isOn = el.getAttribute("aria-pressed") === "true";
+
+        if (isOn) {
+          active[type].delete(value);
+          el.setAttribute("aria-pressed", "false");
+        } else {
+          active[type].add(value);
+          el.setAttribute("aria-pressed", "true");
+        }
+
+        applyFilters();
+      });
+    });
+
+    // Wire clear button
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function () {
+        active.effort.clear();
+        active.maturity.clear();
+        btns.forEach(function (btn) {
+          (btn as HTMLButtonElement).setAttribute("aria-pressed", "false");
+        });
+        applyFilters();
+      });
+    }
+
+    // Initial count (no filters active — count el empty, clear hidden)
+    updateCount();
+  })();
+</script>
+
+<style>
+  .domain-page {
+    padding-block: var(--space-xl) var(--space-3xl);
+  }
+
+  /* ---- Breadcrumb ---- */
+  .breadcrumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs) var(--space-xs);
+    list-style: none;
+    margin: 0 0 var(--space-l);
+    padding: 0;
+    font-size: var(--step--1);
+    color: var(--muted);
+  }
+
+  .breadcrumb li {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .breadcrumb li + li::before {
+    content: "/";
+    margin-inline-end: var(--space-xs);
+    color: var(--faint);
+  }
+
+  .breadcrumb a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+
+  .breadcrumb a:hover {
+    color: var(--accent);
+  }
+
+  .breadcrumb [aria-current="page"] {
+    color: var(--text);
+  }
+
+  /* ---- Domain header ---- */
+  .domain-header {
+    position: relative;
+    padding-block-end: var(--space-xl);
+    border-block-end: var(--border-hair) solid var(--border);
+    margin-block-end: var(--space-l);
+  }
+
+  .domain-dot {
+    display: block;
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    border-radius: 50%;
+    margin-block-end: var(--space-s);
+  }
+
+  .domain-header__title {
+    font-size: var(--step-4);
+    line-height: 1.04;
+    letter-spacing: -0.025em;
+    margin-block-end: var(--space-s);
+  }
+
+  .domain-header__blurb {
+    max-inline-size: 56ch;
+    color: var(--muted);
+    font-size: var(--step-0);
+    line-height: 1.55;
+    margin-block-end: var(--space-m);
+  }
+
+  .domain-header__count {
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    color: var(--faint);
+  }
+
+  .domain-header__count-num {
+    font-weight: 650;
+    color: var(--accent);
+    margin-inline-end: 0.25ch;
+  }
+
+  /* ---- Filter bar ---- */
+  .filter-bar {
+    margin-block-end: var(--space-l);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-m);
+  }
+
+  .filter-bar__groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-m) var(--space-l);
+    flex: 1;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .filter-group__label {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .filter-group__buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+  }
+
+  .filter-btn {
+    min-block-size: 44px;
+    padding-inline: var(--space-m);
+    border: var(--border-hair) solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--step--1);
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart),
+      color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .filter-btn:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text-strong);
+  }
+
+  .filter-btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .filter-btn[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+  }
+
+  .filter-btn[aria-pressed="true"]:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+
+  .filter-bar__actions {
+    display: flex;
+    align-items: center;
+    padding-block-start: 1.5rem; /* align with buttons row */
+  }
+
+  .filter-clear {
+    min-block-size: 44px;
+    padding-inline: var(--space-m);
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--muted);
+    font-size: var(--step--1);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition:
+      color var(--dur-fast) var(--ease-out-quart),
+      text-decoration-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .filter-clear:hover {
+    color: var(--text);
+    text-decoration-color: currentColor;
+  }
+
+  .filter-clear:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .filter-count {
+    inline-size: 100%;
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    color: var(--faint);
+    min-block-size: 1.4em; /* reserve space so layout doesn't shift */
+  }
+
+  /* ---- Concept grid ---- */
+  .concept-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-m);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @media (min-width: 36rem) {
+    .concept-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (min-width: 56rem) {
+    .concept-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (min-width: 80rem) {
+    .concept-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  /* Each list item is a grid cell; the card inside fills it. */
+  .concept-grid > li {
+    display: flex;
+  }
+
+  .concept-grid > li > :global(.concept-card) {
+    inline-size: 100%;
+  }
+
+  /* Hidden items (JS filter applied) leave no gap in the grid. */
+  .concept-grid > li[hidden] {
+    display: none;
+  }
+
+  .domain-empty {
+    color: var(--muted);
+    font-size: var(--step-0);
+    padding-block: var(--space-2xl);
+    text-align: center;
+  }
+
+  /* Reduced-motion: only transitions need neutralizing; the filter script uses
+     display/hidden toggling which is inherently instant. The global rule in
+     global.css already covers transition-duration, so this is belt-and-suspenders. */
+  @media (prefers-reduced-motion: reduce) {
+    .filter-btn,
+    .filter-clear {
+      transition: none;
+    }
+  }
+</style>

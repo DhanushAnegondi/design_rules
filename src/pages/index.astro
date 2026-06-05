@@ -1,0 +1,332 @@
+---
+/**
+ * Home page — the first impression.
+ *
+ * Deliberately NOT the slop skeleton (hero + three identical feature cards).
+ * Instead: a confident editorial opening, a short scannable "how to use this",
+ * an asymmetric bento of all nine domains with genuine size variance, and a
+ * small secondary "start here" rail of hand-picked beginner concepts.
+ */
+import Base from "@/layouts/Base.astro";
+import DomainCard from "@/components/DomainCard.astro";
+import ConceptCard from "@/components/ConceptCard.astro";
+import { DOMAINS } from "@/lib/domains";
+import { getAllConcepts, conceptsByDomain } from "@/lib/parse-library";
+
+const all = await getAllConcepts();
+const byDomain = conceptsByDomain(all);
+
+const orderedDomains = [...DOMAINS].sort((a, b) => a.order - b.order);
+
+// Which tiles get extra size in the bento. Chosen for rhythm, not by count:
+// the flagship "Visual styles" gets the big 2x2 block; two more get a 2-wide
+// span so the grid breaks out of a uniform 9-up. Everything else is 1x1.
+const FEATURED = new Set(["visual-styles", "scroll-motion", "recipes"]);
+
+const domainTiles = orderedDomains.map((domain) => ({
+  domain,
+  count: (byDomain.get(domain.id) ?? []).length,
+  featured: FEATURED.has(domain.id),
+}));
+
+// "Start here" rail — only concepts that actually exist in the loaded data.
+// Hand-picked, beginner-friendly entry points across different domains.
+const STARTERS: Array<{ domainId: string; slug: string }> = [
+  { domainId: "visual-styles", slug: "glassmorphism" },
+  { domainId: "typography-color", slug: "modular-type-scales" },
+  { domainId: "typography-color", slug: "fluid-type-clamp" },
+  { domainId: "component-patterns", slug: "navbars" },
+  { domainId: "backgrounds-effects", slug: "css-gradients" },
+];
+
+const byKey = new Map(all.map((c) => [`${c.domainId}/${c.slug}`, c]));
+const starters = STARTERS.map((s) => byKey.get(`${s.domainId}/${s.slug}`)).filter(
+  (c): c is NonNullable<typeof c> => c != null
+);
+
+const totalConcepts = all.length;
+---
+
+<Base
+  title="Home"
+  description="A browsable library of modern web-design techniques — visual styles, motion, layouts, components, type and color, plus full recipes — each with a live example and copy-paste code."
+>
+  {/* ---- Editorial opening ---- */}
+  <section class="container intro">
+    <p class="intro__eyebrow">A reference for people learning frontend</p>
+    <h1 class="intro__headline">
+      Modern web design, taken apart into pieces you can
+      <em>see running</em> and copy.
+    </h1>
+    <p class="intro__lede">
+      {totalConcepts} techniques across nine areas — the look of a page, how it
+      moves, how it is laid out, the parts it is built from, and how type and
+      color hold it together. Open any one to read when to use it, when not to,
+      and grab working code and color values.
+    </p>
+  </section>
+
+  {/* ---- How to use this ---- */}
+  <section class="container how" aria-labelledby="how-heading">
+    <h2 id="how-heading" class="how__heading">How to use this</h2>
+    <ol class="how__steps">
+      <li class="how__step">
+        <span class="how__num" aria-hidden="true">1</span>
+        <span>Pick an area from the bento below — start broad, like a look or a layout.</span>
+      </li>
+      <li class="how__step">
+        <span class="how__num" aria-hidden="true">2</span>
+        <span>Open a concept to see it running, read when it fits, and when it doesn't.</span>
+      </li>
+      <li class="how__step">
+        <span class="how__num" aria-hidden="true">3</span>
+        <span>Copy the snippet and the color values straight into your own project.</span>
+      </li>
+    </ol>
+  </section>
+
+  {/* ---- Domain bento ---- */}
+  <section class="container domains" aria-labelledby="domains-heading">
+    <div class="domains__head">
+      <h2 id="domains-heading" class="domains__heading">Browse by area</h2>
+      <p class="domains__sub">Nine areas of web design. The bigger tiles are the broadest places to start.</p>
+    </div>
+
+    <ul class="bento" role="list">
+      {
+        domainTiles.map(({ domain, count, featured }) => (
+          <li class:list={["bento__cell", { "bento__cell--featured": featured }]}>
+            <DomainCard domain={domain} count={count} featured={featured} />
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  {/* ---- Secondary: start here rail ---- */}
+  {
+    starters.length > 0 && (
+      <section class="container starters" aria-labelledby="starters-heading">
+        <div class="starters__head">
+          <h2 id="starters-heading" class="starters__heading">Not sure where to start?</h2>
+          <p class="starters__sub">
+            A few beginner-friendly concepts that show up everywhere. Or jump to the{" "}
+            <a href="/guide">use-when map</a> or <a href="/search">search</a>.
+          </p>
+        </div>
+
+        <ul class="starters__grid" role="list">
+          {starters.map((concept) => (
+            <li>
+              <ConceptCard concept={concept} />
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  <style>
+    /* ---- Editorial opening ---- */
+    .intro {
+      padding-block: var(--space-3xl) var(--space-xl);
+    }
+
+    .intro__eyebrow {
+      font-family: var(--font-mono);
+      font-size: var(--step--1);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-block-end: var(--space-s);
+    }
+
+    .intro__headline {
+      max-inline-size: 18ch;
+      font-size: var(--step-5);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+    }
+
+    /* The display face carries the point of view: emphasised phrase leans into
+       Fraunces' italic + lighter weight for real contrast, not decoration. */
+    .intro__headline em {
+      font-style: italic;
+      font-weight: 400;
+      color: var(--accent);
+    }
+
+    .intro__lede {
+      max-inline-size: var(--measure);
+      margin-block-start: var(--space-l);
+      color: var(--muted);
+      font-size: var(--step-1);
+      line-height: 1.5;
+    }
+
+    /* ---- How to use this ---- */
+    .how {
+      padding-block: var(--space-l);
+      border-block-start: var(--border-hair) solid var(--border);
+    }
+
+    .how__heading {
+      font-size: var(--step-1);
+      font-family: var(--font-body);
+      font-weight: 650;
+      letter-spacing: 0;
+      color: var(--text-strong);
+      margin-block-end: var(--space-m);
+    }
+
+    /* Editorial detail rows, not three equal columns — break the symmetry the
+       slop blocklist warns about. Each step is a full-width row with an oversized
+       display number and a hairline rule between rows. */
+    .how__steps {
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      max-inline-size: 54ch;
+    }
+
+    .how__step {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: baseline;
+      gap: var(--space-m);
+      padding-block: var(--space-m);
+      color: var(--text);
+      font-size: var(--step-0);
+      line-height: 1.5;
+    }
+
+    .how__step + .how__step {
+      border-block-start: var(--border-hair) solid var(--border);
+    }
+
+    .how__num {
+      flex: none;
+      font-family: var(--font-display);
+      font-size: var(--step-3);
+      font-weight: 500;
+      line-height: 1;
+      color: var(--accent);
+      transform: translateY(0.05em);
+    }
+
+    /* ---- Domain bento ---- */
+    .domains {
+      padding-block: var(--space-2xl) var(--space-l);
+    }
+
+    .domains__head {
+      margin-block-end: var(--space-l);
+    }
+
+    .domains__heading {
+      font-size: var(--step-3);
+    }
+
+    .domains__sub {
+      margin-block-start: var(--space-2xs);
+      max-inline-size: 60ch;
+      color: var(--muted);
+      font-size: var(--step-0);
+    }
+
+    /* Asymmetric bento. One column on mobile (DOM order = reading and tab
+       order). At 48rem it becomes 2 columns; at 64rem, 4 columns. Featured
+       tiles span 2 cols (and 2 rows at the widest), and grid-auto-flow:dense
+       backfills the gaps the big tile leaves — keeping the mosaic tight without
+       hand-pinning every cell (which would be fragile if the domain list
+       changes). DOM order is never reordered, so keyboard order stays correct. */
+    .bento {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-m);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .bento__cell {
+      display: flex;
+    }
+
+    .bento__cell > :global(.domain-card) {
+      inline-size: 100%;
+    }
+
+    @media (min-width: 48rem) {
+      .bento {
+        grid-template-columns: repeat(2, 1fr);
+        grid-auto-flow: dense;
+      }
+      .bento__cell--featured {
+        grid-column: span 2;
+      }
+    }
+
+    @media (min-width: 64rem) {
+      .bento {
+        grid-template-columns: repeat(4, 1fr);
+        grid-auto-rows: 1fr;
+      }
+      /* The flagship gets a true 2x2 block; the other featured tiles stay
+         2-wide. The :first-child featured cell is the flagship by DOM order. */
+      .bento__cell--featured {
+        grid-column: span 2;
+      }
+      .bento__cell--featured:first-child {
+        grid-row: span 2;
+      }
+    }
+
+    /* ---- Start here rail (secondary) ---- */
+    .starters {
+      padding-block: var(--space-xl) var(--space-l);
+    }
+
+    .starters__head {
+      margin-block-end: var(--space-m);
+    }
+
+    .starters__heading {
+      font-size: var(--step-1);
+      font-family: var(--font-body);
+      font-weight: 650;
+      letter-spacing: 0;
+      color: var(--text-strong);
+    }
+
+    .starters__sub {
+      margin-block-start: var(--space-2xs);
+      max-inline-size: 60ch;
+      color: var(--muted);
+      font-size: var(--step--1);
+    }
+
+    .starters__grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-s);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    @media (min-width: 36rem) {
+      .starters__grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (min-width: 64rem) {
+      .starters__grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+  </style>
+</Base>

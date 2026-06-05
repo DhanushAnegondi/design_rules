@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Design library">
+  <rect width="32" height="32" rx="7" fill="oklch(16% 0.008 70)"/>
+  <path d="M9 22V10h4.4c3.6 0 6 2.3 6 6s-2.4 6-6 6H9Zm3-2.6h1.3c1.9 0 3.1-1.3 3.1-3.4s-1.2-3.4-3.1-3.4H12v6.8Z" fill="oklch(74% 0.15 62)"/>
+  <circle cx="24" cy="11" r="2.4" fill="oklch(74% 0.15 62)"/>
+</svg>

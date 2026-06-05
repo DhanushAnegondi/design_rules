@@ -1,0 +1,413 @@
+---
+/**
+ * Base.astro — the HTML shell every page uses.
+ * Provides: theme-init (pre-paint, no flash), skip link, header nav with the
+ * nine domains, theme toggle island, semantic landmarks, and a footer.
+ */
+import "../styles/global.css";
+import ThemeToggle from "@/components/ThemeToggle.tsx";
+import { DOMAINS } from "@/lib/domains";
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Extra class applied to <main>. */
+  class?: string;
+}
+
+const {
+  title,
+  description = "A browsable reference for modern web design techniques — visual styles, motion, layout, components, and color.",
+  class: mainClass,
+} = Astro.props;
+
+const fullTitle = `${title} — Design Library`;
+const domains = [...DOMAINS].sort((a, b) => a.order - b.order);
+const dot = (hue: number) => `oklch(70% 0.13 ${hue})`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="color-scheme" content="dark light" />
+
+    {/* Set the theme before first paint to avoid a flash. Defaults to dark. */}
+    <script is:inline>
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var prefersLight =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: light)").matches;
+          var theme = stored ? stored : prefersLight ? "light" : "dark";
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="wordmark" href="/">
+          <span class="wordmark__mark" aria-hidden="true">D</span>
+          <span class="wordmark__text">Design library</span>
+        </a>
+
+        <nav class="primary-nav" aria-label="Primary">
+          {/*
+            One disclosure for all nine domains, at EVERY viewport width.
+            Pure-CSS open/close via the native <details> element; the optional
+            inline script below only adds close-on-Escape and outside-click as a
+            progressive enhancement — reachability never depends on JS.
+          */}
+          <details class="nav-browse">
+            <summary class="nav-browse__summary">
+              <span>Browse</span>
+              <svg class="nav-browse__chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </summary>
+
+            <div class="nav-browse__panel">
+              <ul class="nav-browse__list" role="list">
+                {
+                  domains.map((d) => (
+                    <li>
+                      <a class="nav-link" href={`/${d.id}`}>
+                        <span
+                          class="nav-dot"
+                          style={`background:${dot(d.accentHue)}`}
+                          aria-hidden="true"
+                        />
+                        {d.title}
+                      </a>
+                    </li>
+                  ))
+                }
+              </ul>
+            </div>
+          </details>
+
+          <a class="nav-link nav-link--bar" href="/guide">Use-when map</a>
+          <a class="nav-link nav-link--bar" href="/search">Search</a>
+
+          <div class="site-header__actions">
+            <ThemeToggle client:load />
+          </div>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class={mainClass}>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container site-footer__inner">
+        <p class="site-footer__note">
+          A learning reference built from the design knowledge library. Each page
+          renders the original notes plus live, copyable examples.
+        </p>
+        <nav class="site-footer__links" aria-label="Footer">
+          <a href="/">Home</a>
+          <a href="/guide">Use-when map</a>
+          <a href="/search">Search</a>
+        </nav>
+      </div>
+    </footer>
+
+    {/*
+      Progressive enhancement for the Browse disclosure: close on Escape and on
+      an outside click. The disclosure is fully usable without this (open/close
+      is native <details> behaviour); this only adds convenience. No animation,
+      so it is reduced-motion safe by construction.
+    */}
+    <script is:inline>
+      (function () {
+        var d = document.querySelector(".nav-browse");
+        if (!d) return;
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape" && d.open) {
+            d.open = false;
+            var s = d.querySelector("summary");
+            if (s) s.focus();
+          }
+        });
+        document.addEventListener("click", function (e) {
+          if (d.open && !d.contains(e.target)) d.open = false;
+        });
+      })();
+    </script>
+
+    <style>
+      /* ---- Header ---- */
+      .site-header {
+        position: sticky;
+        inset-block-start: 0;
+        z-index: 50;
+        background: color-mix(in oklch, var(--bg) 86%, transparent);
+        backdrop-filter: blur(10px);
+        border-block-end: var(--border-hair) solid var(--border);
+      }
+
+      .site-header__inner {
+        display: flex;
+        align-items: center;
+        gap: var(--space-m);
+        min-block-size: 60px;
+      }
+
+      .wordmark {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-xs);
+        color: var(--text-strong);
+        text-decoration: none;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-inline-end: auto;
+      }
+
+      .wordmark__mark {
+        display: grid;
+        place-items: center;
+        inline-size: 1.65rem;
+        block-size: 1.65rem;
+        border-radius: var(--radius-s);
+        background: var(--accent);
+        color: var(--accent-contrast);
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: var(--step-0);
+      }
+
+      .wordmark__text {
+        font-family: var(--font-display);
+        font-size: var(--step-1);
+      }
+
+      .site-header__actions {
+        display: flex;
+        align-items: center;
+      }
+
+      /* ---- Theme toggle (styling the island button lives here) ---- */
+      :global(.theme-toggle) {
+        display: inline-grid;
+        place-items: center;
+        inline-size: 44px;
+        block-size: 44px;
+        border-radius: var(--radius-s);
+        border: var(--border-hair) solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        transition: background-color var(--dur-fast) var(--ease-out-quart),
+          border-color var(--dur-fast) var(--ease-out-quart);
+      }
+
+      :global(.theme-toggle:hover) {
+        background: var(--surface-2);
+        border-color: var(--border-strong);
+      }
+
+      :global(.theme-toggle__icon) {
+        display: inline-grid;
+        place-items: center;
+      }
+
+      /* ---- Navigation ----
+         One mechanism at ALL widths: a "Browse" disclosure holding the nine
+         domains, plus two always-visible bar links and the theme toggle. There
+         is no viewport range where the domains become unreachable. The nav row
+         is allowed to wrap on very narrow screens so nothing overflows. */
+      .primary-nav {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--space-2xs) var(--space-s);
+        justify-content: flex-end;
+      }
+
+      /* The disclosure: a relatively-positioned wrapper so its panel can be
+         absolutely positioned beneath the summary. NOT display:contents — that
+         would break the native disclosure behaviour. */
+      .nav-browse {
+        position: relative;
+      }
+
+      .nav-browse__summary {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2xs);
+        min-block-size: 44px;
+        padding-inline: var(--space-s);
+        border-radius: var(--radius-s);
+        border: var(--border-hair) solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--step--1);
+        font-weight: 550;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+
+      /* Hide the default disclosure triangle across browsers. */
+      .nav-browse__summary::-webkit-details-marker {
+        display: none;
+      }
+      .nav-browse__summary::marker {
+        content: "";
+      }
+
+      .nav-browse__summary:hover {
+        border-color: var(--border-strong);
+        color: var(--text-strong);
+      }
+
+      .nav-browse__summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .nav-browse[open] .nav-browse__summary {
+        border-color: var(--border-strong);
+      }
+
+      .nav-browse__chevron {
+        transition: transform var(--dur-fast) var(--ease-out-quart);
+      }
+
+      .nav-browse[open] .nav-browse__chevron {
+        transform: rotate(180deg);
+      }
+
+      /* The panel: absolutely positioned under the summary at every width. */
+      .nav-browse__panel {
+        position: absolute;
+        inset-block-start: calc(100% + var(--space-2xs));
+        inset-inline-end: 0;
+        z-index: 60;
+        min-inline-size: 16rem;
+        max-inline-size: min(22rem, calc(100vw - 2 * var(--space-m)));
+        padding: var(--space-xs);
+        background: var(--bg-elev);
+        border: var(--border-hair) solid var(--border);
+        border-radius: var(--radius-m);
+        box-shadow: var(--shadow-2);
+      }
+
+      .nav-browse__list {
+        display: grid;
+        gap: 2px;
+      }
+
+      .nav-link {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-xs);
+        min-block-size: 44px;
+        padding-inline: var(--space-s);
+        border-radius: var(--radius-s);
+        color: var(--text);
+        text-decoration: none;
+        font-size: var(--step--1);
+        font-weight: 500;
+      }
+
+      .nav-browse__list .nav-link {
+        display: flex;
+      }
+
+      .nav-link:hover {
+        color: var(--text-strong);
+        background: var(--surface);
+      }
+
+      .nav-link:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .nav-dot {
+        flex: none;
+        inline-size: 0.55rem;
+        block-size: 0.55rem;
+        border-radius: 50%;
+      }
+
+      /* The two bar links collapse their horizontal padding a touch on the
+         narrowest screens so the row stays on one or two tidy lines. */
+      .nav-link--bar {
+        padding-inline: var(--space-2xs);
+      }
+
+      @media (min-width: 30rem) {
+        .nav-link--bar {
+          padding-inline: var(--space-s);
+        }
+      }
+
+      /* Respect reduced-motion for the only animated affordance here. */
+      @media (prefers-reduced-motion: reduce) {
+        .nav-browse__chevron {
+          transition: none;
+        }
+      }
+
+      /* ---- Main ---- */
+      main {
+        display: block;
+        min-block-size: 60vh;
+      }
+
+      /* ---- Footer ---- */
+      .site-footer {
+        margin-block-start: var(--space-3xl);
+        border-block-start: var(--border-hair) solid var(--border);
+        padding-block: var(--space-xl);
+        background: var(--bg-elev);
+      }
+
+      .site-footer__inner {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-m);
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .site-footer__note {
+        max-inline-size: 52ch;
+        color: var(--muted);
+        font-size: var(--step--1);
+      }
+
+      .site-footer__links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-m);
+        font-size: var(--step--1);
+      }
+
+      .site-footer__links a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .site-footer__links a:hover {
+        color: var(--accent);
+      }
+    </style>
+  </body>
+</html>

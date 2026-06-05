@@ -1,0 +1,161 @@
+---
+/**
+ * ConceptCard.astro — a compact card linking to a single concept
+ * (`/{concept.domainId}/{concept.slug}`).
+ *
+ * Shows the title, the one-line definition, and a compact metadata row. A full
+ * <MetaChips> row (with every "Best for" item) is too heavy for a card, so this
+ * uses a trimmed inline version: the two most identifying facts for the kind of
+ * entry (Bucket + Maturity for concepts, Build + Feel for recipes). The concept
+ * page renders the full chips. This component is self-contained so it can be
+ * reused by the domain landing page.
+ */
+import type { Concept } from "@/lib/parse-library";
+import { domainById } from "@/lib/domains";
+
+interface Props {
+  concept: Concept;
+}
+
+const { concept } = Astro.props;
+
+const href = `/${concept.domainId}/${concept.slug}`;
+const domain = domainById(concept.domainId);
+const dot = domain ? `oklch(70% 0.13 ${domain.accentHue})` : undefined;
+
+// Compact, identifying facts only — not the full chip set.
+const facts: string[] = [];
+if (concept.isRecipe) {
+  if (concept.meta.buildTarget) {
+    facts.push(
+      concept.meta.buildTarget
+        .replace(/-/g, " ")
+        .replace(/^./, (c) => c.toUpperCase())
+    );
+  }
+  if (concept.meta.feel) facts.push(concept.meta.feel);
+} else {
+  if (concept.meta.bucket) facts.push(concept.meta.bucket);
+  if (concept.meta.maturity) facts.push(concept.meta.maturity);
+}
+// Keep it to two so the row never wraps to three lines on a narrow card.
+const compactFacts = facts.slice(0, 2);
+---
+
+<a class="concept-card" href={href}>
+  <span class="concept-card__head">
+    {dot && <span class="concept-card__dot" style={`background:${dot}`} aria-hidden="true"></span>}
+    <span class="concept-card__title">{concept.title}</span>
+  </span>
+
+  {
+    concept.definition && (
+      <span class="concept-card__def">{concept.definition}</span>
+    )
+  }
+
+  {
+    compactFacts.length > 0 && (
+      <span class="concept-card__facts" aria-hidden="false">
+        {compactFacts.map((f, i) => (
+          <>
+            {i > 0 && <span class="concept-card__sep" aria-hidden="true">·</span>}
+            <span class="concept-card__fact">{f}</span>
+          </>
+        ))}
+      </span>
+    )
+  }
+</a>
+
+<style>
+  .concept-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    min-block-size: 44px;
+    block-size: 100%;
+    padding: var(--space-m);
+    border: var(--border-hair) solid var(--border);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    transition:
+      transform var(--dur-mid) var(--ease-out-expo),
+      border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .concept-card:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+  }
+
+  .concept-card:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  .concept-card__head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+  }
+
+  .concept-card__dot {
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    /* Nudge the dot onto the text baseline-ish. */
+    transform: translateY(0.1em);
+  }
+
+  .concept-card__title {
+    font-family: var(--font-display);
+    font-weight: 560;
+    font-size: var(--step-1);
+    line-height: 1.15;
+    letter-spacing: -0.014em;
+    color: var(--text-strong);
+    font-variation-settings: "opsz" 36;
+  }
+
+  .concept-card__def {
+    color: var(--muted);
+    font-size: var(--step--1);
+    line-height: 1.5;
+    /* Keep cards even: clamp to two lines. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .concept-card__facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs);
+    margin-block-start: var(--space-2xs);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    color: var(--faint);
+  }
+
+  .concept-card__sep {
+    color: var(--border-strong);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .concept-card {
+      transition: none;
+    }
+    .concept-card:hover {
+      transform: none;
+    }
+  }
+</style>

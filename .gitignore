@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.astro/
+.pagefind/
+*.log
+.DS_Store
+.env
+.env.*
+
+# Build-time agent config / orchestration — not part of the published website
+.claude/
