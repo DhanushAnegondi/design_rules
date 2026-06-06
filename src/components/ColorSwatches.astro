@@ -1,12 +1,18 @@
 ---
 /**
- * ColorSwatches.astro — "Colors used" panel. Each swatch is a real <button> that
- * copies its raw color value to the clipboard via a tiny inline script and shows a
- * transient "Copied" state. An aria-live region announces the copy politely.
+ * ColorSwatches.astro — "Colors" disclosure. Collapsed by default into a
+ * "Colors (N)" trigger; opening it reveals the swatch list. Each swatch is a
+ * real <button> that copies its raw color value to the clipboard via a tiny
+ * inline script and shows a transient "Copied" state. An aria-live region
+ * announces the copy politely.
  *
- * The swatch box background comes from data (the color's own css value) — that is
- * the one place raw color is allowed. A swatch close to the page background still
- * gets a visible ring/border so it remains distinguishable.
+ * The disclosure is a native <details>/<summary>: keyboard-operable, present
+ * and usable WITHOUT JavaScript (it opens and shows the swatch values; only the
+ * one-click copy needs JS, and the raw value is selectable text regardless).
+ *
+ * The swatch box background comes from data (the color's own css value) — that
+ * is the one place raw color is allowed. A swatch close to the page background
+ * still gets a visible ring/border so it remains distinguishable.
  *
  * If `colors` is empty the component renders nothing.
  */
@@ -17,36 +23,54 @@ interface Props {
 }
 
 const { colors } = Astro.props;
+const count = colors.length;
 ---
 
 {
-  colors.length > 0 && (
-    <section class="swatches" aria-label="Colors used">
-      <p class="swatches__title">Colors used</p>
-      <ul class="swatches__list" role="list">
-        {colors.map((color) => (
-          <li>
-            <button
-              type="button"
-              class="swatch"
-              data-copy={color.raw}
-              aria-label={`Copy ${color.raw}`}
-            >
-              <span
-                class="swatch__chip"
-                style={`background:${color.css}`}
-                aria-hidden="true"
-              />
-              <span class="swatch__value">{color.raw}</span>
-              <span class="swatch__state" aria-hidden="true" data-state>
-                Copy
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <p class="visually-hidden" role="status" aria-live="polite" data-swatch-live />
-    </section>
+  count > 0 && (
+    <details class="swatches">
+      <summary class="swatches__summary">
+        <span class="swatches__chevron" aria-hidden="true" />
+        <span class="swatches__summary-label">Colors</span>
+        <span class="swatches__count" aria-hidden="true">
+          {count}
+        </span>
+        <span class="visually-hidden">
+          {count} color {count === 1 ? "value" : "values"} used in this concept
+        </span>
+      </summary>
+
+      <div class="swatches__body">
+        <ul class="swatches__list" role="list">
+          {colors.map((color) => (
+            <li>
+              <button
+                type="button"
+                class="swatch"
+                data-copy={color.raw}
+                aria-label={`Copy ${color.raw}`}
+              >
+                <span
+                  class="swatch__chip"
+                  style={`background:${color.css}`}
+                  aria-hidden="true"
+                />
+                <span class="swatch__value">{color.raw}</span>
+                <span class="swatch__state" aria-hidden="true" data-state>
+                  Copy
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p
+          class="visually-hidden"
+          role="status"
+          aria-live="polite"
+          data-swatch-live
+        />
+      </div>
+    </details>
   )
 }
 
@@ -78,15 +102,98 @@ const { colors } = Astro.props;
 </script>
 
 <style>
-  .swatches__title {
+  /* ---- Disclosure shell ---------------------------------------------------
+     A calm "Colors (N)" trigger that mirrors the TOC's quiet chrome. Collapsed
+     by default; native <details> so it is keyboard-operable and works with no
+     JS. The trigger sits in the aside under the TOC. */
+  .swatches {
+    font-size: var(--step--1);
+  }
+
+  .swatches__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-block-size: 44px;
+    padding-inline: var(--space-xs);
+    margin-inline: calc(-1 * var(--space-xs));
+    border-radius: var(--radius-s);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    color: var(--text);
+    transition: background-color var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .swatches__summary::-webkit-details-marker {
+    display: none;
+  }
+  .swatches__summary::marker {
+    content: "";
+  }
+
+  .swatches__summary:hover {
+    background: var(--surface);
+  }
+
+  .swatches__summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* CSS-drawn chevron: rotates to point down when open. */
+  .swatches__chevron {
+    flex: none;
+    inline-size: 8px;
+    block-size: 8px;
+    border-inline-end: 2px solid var(--faint);
+    border-block-end: 2px solid var(--faint);
+    transform: rotate(-45deg);
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .swatches[open] .swatches__chevron {
+    transform: rotate(45deg);
+  }
+
+  .swatches__summary:hover .swatches__chevron {
+    border-color: var(--accent);
+  }
+
+  .swatches__summary-label {
     font-family: var(--font-mono);
     font-size: 0.82em;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: var(--faint);
-    margin-block-end: var(--space-xs);
+    color: var(--muted);
   }
 
+  /* The count pill: a quiet badge, not a loud number. */
+  .swatches__count {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 1.5em;
+    padding-inline: 0.4em;
+    border: var(--border-hair) solid var(--border);
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    line-height: 1.6;
+    color: var(--faint);
+  }
+
+  .swatches__summary:hover .swatches__count {
+    border-color: var(--border-strong);
+    color: var(--muted);
+  }
+
+  .swatches__body {
+    margin-block-start: var(--space-s);
+  }
+
+  /* ---- Swatch list --------------------------------------------------------- */
   .swatches__list {
     list-style: none;
     margin: 0;
@@ -146,7 +253,9 @@ const { colors } = Astro.props;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .swatch {
+    .swatch,
+    .swatches__summary,
+    .swatches__chevron {
       transition: none;
     }
   }

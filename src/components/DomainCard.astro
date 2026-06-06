@@ -68,12 +68,18 @@ const hueVar = `--card-hue:${domain.accentHue}`;
 
 <style>
   .domain-card {
-    /* The whole tile is one link. */
+    /* The whole tile is one link. A single internal column drives a shared
+       baseline grid: count (top, quiet) → title + blurb (the substance) →
+       Browse cue (bottom, quiet). `margin-block-end:auto` on the body pins the
+       cue to the floor so every tile, tall or short, reads on the same rhythm. */
     position: relative;
     isolation: isolate;
     display: flex;
     flex-direction: column;
-    gap: var(--space-l);
+    /* Deliberate vertical rhythm: a clear band between the count and the title,
+       and between the title-block and the cue, without the loose --space-l gap
+       that left elements floating. The body owns its own internal gap. */
+    gap: var(--space-m);
     min-block-size: 44px;
     block-size: 100%;
     padding: var(--space-xl);
@@ -435,7 +441,7 @@ const hueVar = `--card-hue:${domain.accentHue}`;
     background-size: 30px 30px;
   }
 
-  /* ---- Top row: concept count ---- */
+  /* ---- Top row: concept count (quiet, mono, faint — recedes) ---- */
   .domain-card__top {
     display: flex;
     align-items: center;
@@ -445,42 +451,53 @@ const hueVar = `--card-hue:${domain.accentHue}`;
   .domain-card__count {
     font-family: var(--font-mono);
     font-size: var(--step--1);
-    letter-spacing: 0.01em;
-    color: var(--muted);
+    /* Quieter than the title and blurb: faint, with open tracking so the small
+       mono numerals read as a label, not body copy. */
+    letter-spacing: 0.02em;
+    color: var(--faint);
   }
 
   /* ---- Body: title + blurb, pushed apart from the cue below ---- */
   .domain-card__body {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2xs);
+    /* Tight, intentional space between title and its blurb — they're one unit. */
+    gap: var(--space-xs);
     margin-block-end: auto;
   }
 
   .domain-card__title {
     font-family: var(--font-display);
-    font-weight: 560;
+    /* Fraunces at a confident display weight; opsz tuned UP to 56 so the serifs
+       and contrast read as an intentional display cut, not a default. Tracking
+       eased to -0.012em (well above the -0.04em floor) so letters never touch. */
+    font-weight: 580;
     font-size: var(--step-2);
-    line-height: 1.1;
-    letter-spacing: -0.018em;
+    line-height: 1.08;
+    letter-spacing: -0.012em;
     color: var(--text-strong);
-    font-variation-settings: "opsz" 48;
+    font-variation-settings: "opsz" 56;
+    text-wrap: balance;
   }
 
   .domain-card__blurb {
+    /* Clearly secondary: smaller, muted, and measure-capped so it never runs
+       the full width of a featured tile and stays comfortable to read. */
     color: var(--muted);
     font-size: var(--step--1);
     line-height: 1.55;
-    max-inline-size: 46ch;
+    max-inline-size: 38ch;
+    text-wrap: pretty;
   }
 
-  /* ---- Footer cue ---- */
+  /* ---- Footer cue (quiet until hover) ---- */
   .domain-card__cue {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2xs);
     font-family: var(--font-mono);
     font-size: var(--step--1);
+    letter-spacing: 0.02em;
     color: var(--faint);
     transition:
       color var(--dur-fast) var(--ease-out-quart),
@@ -496,13 +513,31 @@ const hueVar = `--card-hue:${domain.accentHue}`;
     transform: translateX(3px);
   }
 
-  /* ---- Featured tile: bigger type + spans, only on wide enough grids ---- */
+  /* ---- Featured tile: a deliberate bigger sibling, not a stretched box ----
+     More breathing room (padding + gap), a genuine jump in title scale (step-2
+     → step-4, ~1.8x, real contrast not a nudge), opsz pushed further so the
+     display cut grows with the size, and a wider blurb measure since the tile
+     now has the room. The whole featured tile reads as the anchor of the bento. */
+  .domain-card--featured {
+    padding: var(--space-2xl);
+    gap: var(--space-l);
+  }
+
   .domain-card--featured .domain-card__title {
-    font-size: var(--step-3);
+    font-size: var(--step-4);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    font-variation-settings: "opsz" 96;
+  }
+
+  .domain-card--featured .domain-card__body {
+    gap: var(--space-s);
   }
 
   .domain-card--featured .domain-card__blurb {
     font-size: var(--step-0);
+    line-height: 1.5;
+    max-inline-size: 44ch;
   }
 
   /* The grid spans only apply where the parent grid actually has the columns;

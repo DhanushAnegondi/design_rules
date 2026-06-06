@@ -23,6 +23,7 @@ import {
   type Token,
 } from "@/lib/parse-library";
 import { domainById } from "@/lib/domains";
+import { sectionLabel } from "@/lib/section-labels";
 
 export async function getStaticPaths() {
   const concepts = await getAllConcepts();
@@ -320,6 +321,13 @@ function splitPrimaryTokens(section: Section): SplitTokens {
                 </div>
               );
 
+            // Short, minimal display label for both the on-page heading and
+            // (via Toc) the table of contents. The anchor id stays the slug of
+            // the ORIGINAL title so TOC links + deep-links keep resolving; only
+            // the visible TEXT shortens. When the short form drops words we
+            // expose the original wording as an accessible name.
+            const label = sectionLabel(section.title);
+
             if (!primary) {
               // SECONDARY: collapsed by default. The heading id lives on the
               // <details> so TOC links can find and open it. The visible <h2>
@@ -328,12 +336,16 @@ function splitPrimaryTokens(section: Section): SplitTokens {
               return (
                 <section class="concept__section concept__section--secondary">
                   <Disclosure
-                    summaryLabel={`Show: ${section.title}`}
+                    summaryLabel={`Show: ${label.short}`}
                     id={section.slug}
                     variant="section"
                   >
-                    <h2 class="concept__h2 concept__h2--insummary">
-                      {section.title}
+                    <h2
+                      class="concept__h2 concept__h2--insummary"
+                      aria-label={label.ambiguous ? label.full : undefined}
+                      title={label.ambiguous ? label.full : undefined}
+                    >
+                      {label.short}
                     </h2>
                     {section.tokens.map(renderToken)}
                   </Disclosure>
@@ -346,8 +358,13 @@ function splitPrimaryTokens(section: Section): SplitTokens {
             const { lead, extra, extraLabel } = splitPrimaryTokens(section);
             return (
               <section class="concept__section">
-                <h2 id={section.slug} class="concept__h2">
-                  {section.title}
+                <h2
+                  id={section.slug}
+                  class="concept__h2"
+                  aria-label={label.ambiguous ? label.full : undefined}
+                  title={label.ambiguous ? label.full : undefined}
+                >
+                  {label.short}
                 </h2>
                 {lead.map(renderToken)}
                 {extra.length > 0 && (
@@ -406,7 +423,7 @@ function splitPrimaryTokens(section: Section): SplitTokens {
 
 <style>
   .concept {
-    padding-block: var(--space-xl) var(--space-3xl);
+    padding-block: var(--space-l) var(--space-3xl);
   }
 
   /* ---- Header ---- */
@@ -420,9 +437,11 @@ function splitPrimaryTokens(section: Section): SplitTokens {
     align-items: center;
     gap: var(--space-2xs) var(--space-xs);
     list-style: none;
-    margin: 0 0 var(--space-m);
+    margin: 0 0 var(--space-l);
     padding: 0;
+    font-family: var(--font-mono);
     font-size: var(--step--1);
+    letter-spacing: 0.01em;
     color: var(--muted);
   }
 
@@ -451,14 +470,31 @@ function splitPrimaryTokens(section: Section): SplitTokens {
   }
 
   .concept__title {
+    font-family: var(--font-display);
+    /* Confident editorial display size; clamped well under the 6rem ceiling. */
+    font-size: var(--step-4);
+    font-weight: 560;
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    color: var(--text-strong);
     margin-block: var(--space-xs) var(--space-m);
   }
 
+  /* The lead reads as the concept's one-line definition: a touch more presence
+     than plain muted body, without competing with the title. */
   .concept__lead {
+    max-inline-size: 60ch;
     font-size: var(--step-1);
     line-height: 1.5;
-    color: var(--muted);
+    text-wrap: pretty;
+    color: var(--text);
     margin-block-end: var(--space-l);
+  }
+
+  /* Meta chips sit a hair below the lead, divided from it by whitespace only. */
+  .concept__header :global(.metachips) {
+    margin-block-start: var(--space-s);
   }
 
   /* ---- Grid: aside + article ---- */
@@ -487,7 +523,15 @@ function splitPrimaryTokens(section: Section): SplitTokens {
 
   .concept__aside-inner {
     display: grid;
-    gap: var(--space-xl);
+    gap: var(--space-l);
+  }
+
+  /* When both the TOC and the colors disclosure are present, divide them with a
+     hairline so the colors trigger reads as a distinct, on-demand control under
+     the TOC rather than a stray row. */
+  .concept__aside-inner > :global(.swatches:not(:first-child)) {
+    padding-block-start: var(--space-l);
+    border-block-start: var(--border-hair) solid var(--border);
   }
 
   @media (min-width: 60rem) {
@@ -574,7 +618,7 @@ function splitPrimaryTokens(section: Section): SplitTokens {
   .pager {
     display: grid;
     gap: var(--space-2xs);
-    padding: var(--space-m);
+    padding: var(--space-m) var(--space-l);
     border: var(--border-hair) solid var(--border);
     border-radius: var(--radius-m);
     background: var(--surface);
@@ -599,22 +643,73 @@ function splitPrimaryTokens(section: Section): SplitTokens {
     outline-offset: 2px;
   }
 
+  /* Direction row: a CSS-drawn arrow + the "Previous"/"Next" eyebrow. The arrow
+     points the way it navigates and nudges on hover (transform only). */
   .pager__dir {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
     font-family: var(--font-mono);
     font-size: 0.8em;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--faint);
+  }
+
+  .pager--next .pager__dir {
+    flex-direction: row-reverse;
+  }
+
+  .pager__dir::before {
+    content: "";
+    inline-size: 7px;
+    block-size: 7px;
+    border-block-start: 2px solid currentColor;
+    border-inline-start: 2px solid currentColor;
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+
+  /* Prev arrow points left; next arrow points right. */
+  .pager--prev .pager__dir::before {
+    transform: rotate(-45deg);
+  }
+  .pager--next .pager__dir::before {
+    transform: rotate(135deg);
+  }
+
+  .pager:hover .pager__dir {
+    color: var(--accent);
+  }
+  .pager--prev:hover .pager__dir::before {
+    transform: rotate(-45deg) translate(1px, 1px);
+  }
+  .pager--next:hover .pager__dir::before {
+    transform: rotate(135deg) translate(1px, 1px);
   }
 
   .pager__title {
     font-family: var(--font-display);
     font-size: var(--step-1);
+    font-weight: 550;
     line-height: 1.2;
+    color: var(--text-strong);
+  }
+
+  @media (max-width: 38rem) {
+    .concept__pager {
+      grid-template-columns: 1fr;
+    }
+    .pager--next {
+      text-align: start;
+    }
+    .pager--next .pager__dir {
+      flex-direction: row;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .pager {
+    .pager,
+    .pager__dir::before {
       transition: none;
     }
   }

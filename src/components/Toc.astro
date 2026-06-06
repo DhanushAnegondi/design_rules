@@ -10,6 +10,7 @@
  * static set of links, which is the calm fallback.
  */
 import type { Section } from "@/lib/parse-library";
+import { sectionLabel } from "@/lib/section-labels";
 
 interface Props {
   sections: Section[];
@@ -23,13 +24,22 @@ const { sections } = Astro.props;
     <nav class="toc" aria-label="On this page">
       <p class="toc__title">On this page</p>
       <ol class="toc__list" role="list">
-        {sections.map((section) => (
-          <li>
-            <a class="toc__link" href={`#${section.slug}`} data-toc-link={section.slug}>
-              {section.title}
-            </a>
-          </li>
-        ))}
+        {sections.map((section) => {
+          const label = sectionLabel(section.title);
+          return (
+            <li>
+              <a
+                class="toc__link"
+                href={`#${section.slug}`}
+                data-toc-link={section.slug}
+                aria-label={label.ambiguous ? label.full : undefined}
+                title={label.ambiguous ? label.full : undefined}
+              >
+                <span class="toc__text">{label.short}</span>
+              </a>
+            </li>
+          );
+        })}
       </ol>
     </nav>
   )
@@ -89,20 +99,32 @@ const { sections } = Astro.props;
       revealTarget(id);
     });
 
-    // On initial load with a hash (e.g. shared deep link), reveal it.
-    if (window.location.hash) {
-      revealTarget(
-        decodeURIComponent(window.location.hash.replace(/^#/, ""))
-      );
+    // On initial load with a hash (e.g. shared deep link), reveal it — after the
+    // DOM is parsed, since this aside renders before the <article>.
+    function revealInitialHash() {
+      if (window.location.hash) {
+        revealTarget(
+          decodeURIComponent(window.location.hash.replace(/^#/, ""))
+        );
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", revealInitialHash);
+    } else {
+      revealInitialHash();
     }
   })();
 
   (function () {
-    var reduce =
-      window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return; // calm fallback: no moving active indicator
-
+    // Scroll-spy runs in ALL motion modes: the active section gets highlighted
+    // and bold. The DIFFERENCE under prefers-reduced-motion is purely CSS — the
+    // magnify scale + transitions are disabled there (see the stylesheet), so we
+    // keep a calm, non-animated bold+accent state rather than no indicator.
+    //
+    // IMPORTANT: this aside (the TOC + this script) renders BEFORE the <article>
+    // in source order, so at parse time the section headings do not exist yet and
+    // getElementById() would return null. Defer setup until the DOM is parsed.
+    function initSpy() {
     var links = Array.prototype.slice.call(
       document.querySelectorAll("[data-toc-link]")
     );
@@ -141,6 +163,12 @@ const { sections } = Astro.props;
       var el = document.getElementById(a.getAttribute("data-toc-link"));
       if (el) observer.observe(el);
     });
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initSpy);
+    } else {
+      initSpy();
+    }
   })();
 </script>
 
@@ -155,7 +183,7 @@ const { sections } = Astro.props;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--faint);
-    margin-block-end: var(--space-xs);
+    margin-block-end: var(--space-s);
   }
 
   .toc__list {
@@ -163,34 +191,83 @@ const { sections } = Astro.props;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 1px;
+    gap: 2px;
     /* The accent rail sits to the left; links indent past it. */
     border-inline-start: var(--border-hair) solid var(--border);
   }
 
   .toc__link {
-    display: block;
-    padding: 0.4em var(--space-s);
+    /* Flex with a reserved row height so the active line can magnify without
+       pushing the list taller (transform is visual-only; the steady min-height
+       keeps the rhythm calm). */
+    display: flex;
+    align-items: center;
+    min-block-size: 1.9em;
+    padding: 0.3em var(--space-s);
     margin-inline-start: -1px;
     border-inline-start: 2px solid transparent;
     color: var(--muted);
     text-decoration: none;
     line-height: 1.35;
+    /* Only color/border animate by default; the magnify lives on the inner span
+       (transform) so it never nudges the rail or the list height. */
+    transition:
+      color var(--dur-mid) var(--ease-out-quart),
+      border-color var(--dur-mid) var(--ease-out-quart);
+  }
+
+  /* The label text is the element we scale, with a left transform-origin so the
+     active entry grows toward the reader from the rail, not from its centre —
+     no horizontal drift, no layout shift (transform doesn't reflow siblings). */
+  .toc__text {
+    display: inline-block;
+    transform-origin: left center;
+    transition:
+      transform var(--dur-mid) var(--ease-out-quart),
+      font-weight var(--dur-mid) var(--ease-out-quart);
+    will-change: transform;
   }
 
   .toc__link:hover {
     color: var(--text-strong);
   }
 
+  /* Scroll-spy: the section currently in view is HIGHLIGHTED, BOLD, and
+     MAGNIFIED; the others recede (quieter colour, normal weight, base scale).
+     We reserve vertical room for the larger active line via min-block-size on
+     every row so the grow never pushes the list taller. */
   .toc__link[aria-current="true"] {
     color: var(--text-strong);
     border-inline-start-color: var(--accent);
-    font-weight: 550;
+    font-weight: 650;
+  }
+
+  .toc__link[aria-current="true"] .toc__text {
+    transform: scale(1.14);
+    font-weight: 650;
+  }
+
+  /* When ANY entry is active, push the rest quieter so the active one reads as
+     the clear focus rather than merely "also bold". */
+  .toc__list:has([aria-current="true"]) .toc__link:not([aria-current="true"]) {
+    color: var(--faint);
   }
 
   .toc__link:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
     border-radius: 3px;
+  }
+
+  /* Reduced motion: keep the emphasis (bold + accent rail + recede), drop the
+     scale and all transitions. No magnify jitter, just a calm static state. */
+  @media (prefers-reduced-motion: reduce) {
+    .toc__link,
+    .toc__text {
+      transition: none;
+    }
+    .toc__link[aria-current="true"] .toc__text {
+      transform: none;
+    }
   }
 </style>

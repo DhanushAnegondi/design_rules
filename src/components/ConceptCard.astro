@@ -66,9 +66,13 @@ const compactFacts = facts.slice(0, 2);
 
 <style>
   .concept-card {
+    /* Shares the DomainCard rhythm: title + definition are one unit at the top,
+       the facts row is pinned to the floor (margin-block-end:auto on the def
+       block via the layout below), so a grid of these reads as one tidy system.
+       Generous, even internal padding — nothing crammed against an edge. */
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs);
+    gap: var(--space-s);
     min-block-size: 44px;
     block-size: 100%;
     padding: var(--space-l);
@@ -86,7 +90,7 @@ const compactFacts = facts.slice(0, 2);
   .concept-card:hover {
     background: var(--surface-2);
     border-color: var(--border-strong);
-    transform: translateY(-2px);
+    transform: translateY(-3px);
   }
 
   .concept-card:focus-visible {
@@ -101,18 +105,25 @@ const compactFacts = facts.slice(0, 2);
 
   .concept-card__title {
     font-family: var(--font-display);
-    font-weight: 560;
+    /* Confident display cut; tracking eased above the floor so glyphs breathe. */
+    font-weight: 580;
     font-size: var(--step-1);
-    line-height: 1.15;
-    letter-spacing: -0.014em;
+    line-height: 1.12;
+    letter-spacing: -0.01em;
     color: var(--text-strong);
-    font-variation-settings: "opsz" 36;
+    font-variation-settings: "opsz" 40;
+    text-wrap: balance;
   }
 
+  /* Title + definition form one block; the facts row gets pushed to the floor so
+     a row of cards aligns its meta on a shared baseline regardless of def length. */
   .concept-card__def {
+    margin-block-end: auto;
     color: var(--muted);
     font-size: var(--step--1);
-    line-height: 1.5;
+    line-height: 1.55;
+    max-inline-size: 42ch;
+    text-wrap: pretty;
     /* Keep cards even: clamp to two lines. */
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -121,14 +132,17 @@ const compactFacts = facts.slice(0, 2);
     overflow: hidden;
   }
 
+  /* The facts row is quiet meta: mono, faint, open tracking. No extra top margin
+     (the flex gap + the def's auto margin handle separation) so it never
+     double-spaces against the definition. */
   .concept-card__facts {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2xs);
-    margin-block-start: var(--space-xs);
     font-family: var(--font-mono);
     font-size: var(--step--1);
+    letter-spacing: 0.02em;
     color: var(--faint);
   }
 
